@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+
+# Xcode
+DerivedData/
+build/
+*.xccheckout
+*.xcuserstate
+xcuserdata/
+
+# Workspaces/projects
+*.xcworkspace
+
+# Swift Package Manager
+.swiftpm/
+.build/
+
+# CocoaPods (only if you add Pods later)
+Pods/
+
+# Carthage (only if you add it later)
+Carthage/
+
+# Fastlane (if you add it later)
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
