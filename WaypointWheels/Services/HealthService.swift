@@ -22,28 +22,19 @@ final class HealthService {
         let status: String
     }
 
-    private let session: URLSession
-    private let bundle: Bundle
+    private let apiClient: APIClient
 
-    init(session: URLSession = .shared, bundle: Bundle = .main) {
-        self.session = session
-        self.bundle = bundle
+    init(apiClient: APIClient = APIClient()) {
+        self.apiClient = apiClient
     }
 
     func fetchHealthStatus() async throws -> String {
-        let baseURLString = try readBaseURLString()
-        let healthURL = try healthURL(from: baseURLString)
-
-        let (data, response) = try await session.data(from: healthURL)
-
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200..<300).contains(httpResponse.statusCode) else {
-            throw HealthError.invalidResponse
+        do {
+            let response: HealthResponse = try await apiClient.request(path: "health")
+            return response.status
+        } catch let error as APIClient.APIError {
+            throw HealthError(apiError: error)
         }
-
-        let decoder = JSONDecoder()
-        let health = try decoder.decode(HealthResponse.self, from: data)
-        return health.status
     }
 
     func healthURL(from baseURLString: String) throws -> URL {
@@ -53,13 +44,17 @@ final class HealthService {
 
         return baseURL.appendingPathComponent("health")
     }
+}
 
-    private func readBaseURLString() throws -> String {
-        guard let value = bundle.object(forInfoDictionaryKey: "API_BASE_URL") as? String,
-              !value.isEmpty else {
-            throw HealthError.missingConfiguration
+private extension HealthService.HealthError {
+    init(apiError: APIClient.APIError) {
+        switch apiError {
+        case .missingConfiguration:
+            self = .missingConfiguration
+        case let .invalidBaseURL(value):
+            self = .invalidBaseURL(value)
+        case .invalidResponse:
+            self = .invalidResponse
         }
-
-        return value
     }
 }
