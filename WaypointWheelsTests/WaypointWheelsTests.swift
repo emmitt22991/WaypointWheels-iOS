@@ -9,7 +9,91 @@ import Foundation
 import Testing
 @testable import WaypointWheels
 
-struct WaypointWheelsTests {
+final class MockURLProtocol: URLProtocol {
+    static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        guard let handler = Self.requestHandler else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+
+        do {
+            let (response, data) = try handler(request)
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    override func stopLoading() {}
+}
+
+final class StubBundle: Bundle {
+    private let values: [String: Any]
+
+    init(info: [String: Any]) {
+        self.values = info
+        super.init()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func object(forInfoDictionaryKey key: String) -> Any? {
+        values[key]
+    }
+}
+
+struct APIClientTests {
+    struct SampleResponse: Codable, Equatable {
+        let status: String
+    }
+
+    private func makeSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    @Test("APIClient decodes responses relative to the configured base URL")
+    func requestDecodesJSON() async throws {
+        let expectedStatus = "ok"
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let client = APIClient(session: session, bundle: bundle)
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == "https://example.com/api/health")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = try JSONEncoder().encode(SampleResponse(status: expectedStatus))
+            return (response, data)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let response: SampleResponse = try await client.request(path: "health")
+
+        #expect(response.status == expectedStatus)
+    }
+}
+
+struct HealthServiceTests {
+    private func makeSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
 
     @Test("HealthService builds the /health URL relative to the base URL")
     func healthURLAppendsPath() throws {
@@ -20,6 +104,54 @@ struct WaypointWheelsTests {
 
         #expect(url.absoluteString == "https://example.com/api/health")
         #expect(urlWithTrailingSlash.absoluteString == "https://example.com/api/health")
+    }
+
+    @Test("HealthService fetches status via APIClient")
+    func fetchHealthStatusUsesAPIClient() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = HealthService(apiClient: apiClient)
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == "https://example.com/api/health")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = "{""status"": ""ok""}".data(using: .utf8)!
+            return (response, data)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let status = try await service.fetchHealthStatus()
+
+        #expect(status == "ok")
+    }
+
+    @Test("HealthService maps APIClient errors")
+    func fetchHealthStatusMapsErrors() async {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = HealthService(apiClient: apiClient)
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!
+            return (response, Data())
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        do {
+            _ = try await service.fetchHealthStatus()
+            #expect(false, "Expected fetchHealthStatus to throw")
+        } catch let error as HealthService.HealthError {
+            switch error {
+            case .invalidResponse:
+                break
+            default:
+                #expect(false, "Unexpected HealthError: \(error)")
+            }
+        } catch {
+            #expect(false, "Unexpected error: \(error)")
+        }
     }
 
     @Test("HealthService decodes status from API response with extra fields")
