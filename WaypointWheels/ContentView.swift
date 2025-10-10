@@ -8,12 +8,21 @@
 import SwiftUI
 
 struct ContentView: View {
+    @StateObject private var viewModel = HealthViewModel()
+
     var body: some View {
-        VStack {
+        VStack(spacing: 12) {
             Image(systemName: "globe")
                 .imageScale(.large)
                 .foregroundStyle(.tint)
-            Text("Hello, world!")
+
+            if viewModel.isLoading {
+                Text("Status: (loading…)")
+            } else if let errorMessage = viewModel.errorMessage {
+                Text("Status: \(errorMessage)")
+            } else {
+                Text("Status: \(viewModel.status)")
+            }
         }
         .padding()
     }
