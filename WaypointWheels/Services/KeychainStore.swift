@@ -1,6 +1,10 @@
 import Foundation
 import Security
 
+protocol KeychainStoring {
+    func save(token: String) throws
+}
+
 struct KeychainStore {
     enum KeychainError: LocalizedError {
         case unexpectedStatus(OSStatus)
@@ -41,3 +45,5 @@ struct KeychainStore {
         }
     }
 }
+
+extension KeychainStore: KeychainStoring {}
