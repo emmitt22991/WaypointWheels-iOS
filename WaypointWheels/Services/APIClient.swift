@@ -5,6 +5,7 @@ final class APIClient {
         case missingConfiguration
         case invalidBaseURL(String)
         case invalidResponse
+        case serverError(message: String, body: String?)
 
         var errorDescription: String? {
             switch self {
@@ -14,6 +15,8 @@ final class APIClient {
                 return "Invalid API base URL: \(value)."
             case .invalidResponse:
                 return "Unexpected response from the server."
+            case let .serverError(message, _):
+                return message
             }
         }
     }
@@ -39,7 +42,7 @@ final class APIClient {
         return try await perform(request: request)
     }
 
-    func login(email: String, password: String) async throws -> LoginResponse {
+    func login(email: String, password: String) async throws -> APIResponse<LoginResponse> {
         let base = try requireBaseURL()
         let url = base
             .appendingPathComponent("login")
@@ -50,7 +53,7 @@ final class APIClient {
         let body = LoginRequest(email: email, password: password)
         request.httpBody = try encoder.encode(body)
 
-        return try await perform(request: request)
+        return try await performResponse(request: request)
     }
 
     func url(for path: String) throws -> URL {
@@ -97,18 +100,71 @@ final class APIClient {
     }
 
     private func perform<T: Decodable>(request: URLRequest) async throws -> T {
+        try await performResponse(request: request).value
+    }
+
+    private func performResponse<T: Decodable>(request: URLRequest) async throws -> APIResponse<T> {
         let (data, response) = try await session.data(for: request)
 
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200..<300).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.invalidResponse
         }
 
-        return try decoder.decode(T.self, from: data)
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            let rawBody = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let message = decodeErrorMessage(from: data), !message.isEmpty {
+                throw APIError.serverError(message: message, body: rawBody)
+            }
+
+            if let rawBody, !rawBody.isEmpty {
+                throw APIError.serverError(message: rawBody, body: rawBody)
+            }
+
+            throw APIError.invalidResponse
+        }
+
+        let decoded = try decoder.decode(T.self, from: data)
+        return APIResponse(value: decoded, data: data)
+    }
+
+    private func decodeErrorMessage(from data: Data) -> String? {
+        guard !data.isEmpty else { return nil }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = self.decoder.keyDecodingStrategy
+        decoder.dateDecodingStrategy = self.decoder.dateDecodingStrategy
+        decoder.dataDecodingStrategy = self.decoder.dataDecodingStrategy
+        decoder.nonConformingFloatDecodingStrategy = self.decoder.nonConformingFloatDecodingStrategy
+
+        if let envelope = try? decoder.decode(ErrorEnvelope.self, from: data) {
+            if let message = envelope.message?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
+                return message
+            }
+
+            if let message = envelope.error?.message?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
+                return message
+            }
+
+            if let first = envelope.errors?.compactMap({ $0.trimmingCharacters(in: .whitespacesAndNewlines) }).first(where: { !$0.isEmpty }) {
+                return first
+            }
+        }
+
+        return nil
     }
 }
 
 extension APIClient {
+    struct APIResponse<T> {
+        let value: T
+        let data: Data
+
+        var rawString: String? {
+            guard !data.isEmpty else { return nil }
+            return String(data: data, encoding: .utf8)
+        }
+    }
+
     struct LoginResponse: Decodable {
         struct User: Decodable {
             let name: String
@@ -121,5 +177,15 @@ extension APIClient {
     private struct LoginRequest: Encodable {
         let email: String
         let password: String
+    }
+
+    private struct ErrorEnvelope: Decodable {
+        struct ErrorMessage: Decodable {
+            let message: String?
+        }
+
+        let message: String?
+        let error: ErrorMessage?
+        let errors: [String]?
     }
 }
