@@ -5,7 +5,7 @@ final class APIClient {
         case missingConfiguration
         case invalidBaseURL(String)
         case invalidResponse
-        case serverError(message: String, body: String?)
+        case serverError(String)
 
         var errorDescription: String? {
             switch self {
@@ -15,7 +15,7 @@ final class APIClient {
                 return "Invalid API base URL: \(value)."
             case .invalidResponse:
                 return "Unexpected response from the server."
-            case let .serverError(message, _):
+            case let .serverError(message):
                 return message
             }
         }
@@ -111,6 +111,19 @@ final class APIClient {
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
+            if let message = decodeErrorMessage(from: data) {
+                throw APIError.serverError(message)
+            }
+
+            if let body = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !body.isEmpty {
+                throw APIError.serverError(body)
+            }
+
+            throw APIError.invalidResponse
+        }
+
+        guard (200..<300).contains(httpResponse.statusCode) else {
             let rawBody = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
             if let message = decodeErrorMessage(from: data), !message.isEmpty {
                 throw APIError.serverError(message: message, body: rawBody)
@@ -125,6 +138,32 @@ final class APIClient {
 
         let decoded = try decoder.decode(T.self, from: data)
         return APIResponse(value: decoded, data: data)
+    }
+
+    private func decodeErrorMessage(from data: Data) -> String? {
+        guard !data.isEmpty else { return nil }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = self.decoder.keyDecodingStrategy
+        decoder.dateDecodingStrategy = self.decoder.dateDecodingStrategy
+        decoder.dataDecodingStrategy = self.decoder.dataDecodingStrategy
+        decoder.nonConformingFloatDecodingStrategy = self.decoder.nonConformingFloatDecodingStrategy
+
+        if let envelope = try? decoder.decode(ErrorEnvelope.self, from: data) {
+            if let message = envelope.message?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
+                return message
+            }
+
+            if let message = envelope.error?.message?.trimmingCharacters(in: .whitespacesAndNewlines), !message.isEmpty {
+                return message
+            }
+
+            if let first = envelope.errors?.compactMap({ $0.trimmingCharacters(in: .whitespacesAndNewlines) }).first(where: { !$0.isEmpty }) {
+                return first
+            }
+        }
+
+        return nil
     }
 
     private func decodeErrorMessage(from data: Data) -> String? {
