@@ -112,8 +112,9 @@ struct APIClientTests {
 
         let response = try await client.login(email: "user@example.com", password: "secret")
 
-        #expect(response.token == "abc")
-        #expect(response.user.name == "Taylor")
+        #expect(response.value.token == "abc")
+        #expect(response.value.user.name == "Taylor")
+        #expect(response.rawString == "{\"token\":\"abc\",\"user\":{\"name\":\"Taylor\"}}")
     }
 }
 
