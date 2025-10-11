@@ -40,7 +40,10 @@ final class APIClient {
     }
 
     func login(email: String, password: String) async throws -> LoginResponse {
-        let url = try url(for: "login")
+        let base = try requireBaseURL()
+        let url = base
+            .appendingPathComponent("login")
+            .appendingPathComponent("")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -51,7 +54,7 @@ final class APIClient {
     }
 
     func url(for path: String) throws -> URL {
-        let baseURL = try readBaseURL()
+        let baseURL = try requireBaseURL()
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw APIError.invalidBaseURL(baseURL.absoluteString)
         }
@@ -80,7 +83,7 @@ final class APIClient {
         return url
     }
 
-    private func readBaseURL() throws -> URL {
+    private func requireBaseURL() throws -> URL {
         guard let value = bundle.object(forInfoDictionaryKey: "API_BASE_URL") as? String,
               !value.isEmpty else {
             throw APIError.missingConfiguration
