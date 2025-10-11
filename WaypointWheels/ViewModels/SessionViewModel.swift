@@ -9,10 +9,10 @@ final class SessionViewModel: ObservableObject {
     @Published var userName: String?
 
     private let apiClient: APIClient
-    private let keychainStore: KeychainStore
+    private let keychainStore: any KeychainStoring
 
     init(apiClient: APIClient = APIClient(),
-         keychainStore: KeychainStore = KeychainStore()) {
+         keychainStore: any KeychainStoring = KeychainStore()) {
         self.apiClient = apiClient
         self.keychainStore = keychainStore
     }
@@ -26,14 +26,30 @@ final class SessionViewModel: ObservableObject {
     }
 
     @MainActor
-    private func signInTask() async {
+    func signInTask() async {
         isLoading = true
         errorMessage = nil
 
+        let sanitizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentPassword = password
+
+        guard !sanitizedEmail.isEmpty else {
+            errorMessage = "Please enter your email address."
+            isLoading = false
+            return
+        }
+
+        guard !currentPassword.isEmpty else {
+            errorMessage = "Please enter your password."
+            isLoading = false
+            return
+        }
+
         do {
-            let response = try await apiClient.login(email: email, password: password)
+            let response = try await apiClient.login(email: sanitizedEmail, password: currentPassword)
             try keychainStore.save(token: response.token)
             userName = response.user.name
+            email = sanitizedEmail
         } catch {
             errorMessage = error.localizedDescription
         }
