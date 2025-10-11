@@ -49,26 +49,14 @@ final class SessionViewModel: ObservableObject {
             return
         }
 
-        let sanitizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        let currentPassword = password
-
-        guard !sanitizedEmail.isEmpty else {
-            errorMessage = "Please enter your email address."
-            isLoading = false
-            return
-        }
-
-        guard !currentPassword.isEmpty else {
-            errorMessage = "Please enter your password."
-            isLoading = false
-            return
-        }
+        requestJSON = makeJSON(email: sanitizedEmail, password: currentPassword)
 
         do {
             let response = try await apiClient.login(email: sanitizedEmail, password: currentPassword)
-            try keychainStore.save(token: response.token)
-            userName = response.user.name
+            try keychainStore.save(token: response.value.token)
+            userName = response.value.user.name
             email = sanitizedEmail
+            responseJSON = response.rawString
         } catch {
             if case let APIClient.APIError.serverError(_, body) = error as? APIClient.APIError {
                 responseJSON = body

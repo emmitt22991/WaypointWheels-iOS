@@ -58,7 +58,7 @@ private extension HealthService.HealthError {
             self = .invalidBaseURL(value)
         case .invalidResponse:
             self = .invalidResponse
-        case let .serverError(message):
+        case let .serverError(message, _):
             self = .serverError(message)
         }
     }
