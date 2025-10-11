@@ -58,7 +58,8 @@ final class SessionViewModel: ObservableObject {
             email = sanitizedEmail
             responseJSON = response.rawString
         } catch {
-            if case let APIClient.APIError.serverError(_, body) = error as? APIClient.APIError {
+            if let apiError = error as? APIClient.APIError,
+               case let APIClient.APIError.serverError(_, body) = apiError {
                 responseJSON = body
             }
             errorMessage = error.localizedDescription
