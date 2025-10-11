@@ -5,6 +5,7 @@ final class HealthService {
         case missingConfiguration
         case invalidBaseURL(String)
         case invalidResponse
+        case serverError(String)
 
         var errorDescription: String? {
             switch self {
@@ -14,6 +15,8 @@ final class HealthService {
                 return "Invalid API base URL: \(value)."
             case .invalidResponse:
                 return "Unexpected response from the health endpoint."
+            case let .serverError(message):
+                return message
             }
         }
     }
@@ -55,6 +58,8 @@ private extension HealthService.HealthError {
             self = .invalidBaseURL(value)
         case .invalidResponse:
             self = .invalidResponse
+        case let .serverError(message):
+            self = .serverError(message)
         }
     }
 }

@@ -56,6 +56,14 @@ final class StubBundle: Bundle {
     }
 }
 
+final class MockKeychainStore: KeychainStoring {
+    private(set) var savedToken: String?
+
+    func save(token: String) throws {
+        savedToken = token
+    }
+}
+
 struct APIClientTests {
     struct SampleResponse: Codable, Equatable {
         let status: String
@@ -188,5 +196,80 @@ struct HealthServiceTests {
         let response = try decoder.decode(HealthService.HealthResponse.self, from: json)
 
         #expect(response.status == "ok")
+    }
+}
+
+@MainActor
+struct SessionViewModelTests {
+    private func makeSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    @Test("SessionViewModel trims email whitespace before attempting login")
+    func signInTrimsEmailWhitespace() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let keychainStore = MockKeychainStore()
+        let viewModel = SessionViewModel(apiClient: apiClient, keychainStore: keychainStore)
+
+        let expectedToken = "abc123"
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == "https://example.com/api/login/")
+
+            if let body = request.httpBody,
+               let json = try? JSONSerialization.jsonObject(with: body) as? [String: String] {
+                #expect(json["email"] == "user@example.com")
+                #expect(json["password"] == "secret")
+            } else {
+                #expect(false, "Expected JSON body in login request")
+            }
+
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = """{"token":"\(expectedToken)","user":{"name":"Taylor"}}""".data(using: .utf8)!
+            return (response, data)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        viewModel.email = "  user@example.com  "
+        viewModel.password = "secret"
+
+        await viewModel.signInTask()
+
+        #expect(viewModel.errorMessage == nil)
+        #expect(viewModel.userName == "Taylor")
+        #expect(viewModel.email == "user@example.com")
+        #expect(keychainStore.savedToken == expectedToken)
+    }
+
+    @Test("SessionViewModel validates email and password before calling the API")
+    func signInValidatesInputs() async {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let keychainStore = MockKeychainStore()
+        let viewModel = SessionViewModel(apiClient: apiClient, keychainStore: keychainStore)
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(false, "API should not be called when inputs are invalid")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, Data())
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        viewModel.email = "   "
+        viewModel.password = "secret"
+
+        await viewModel.signInTask()
+        #expect(viewModel.errorMessage == "Please enter your email address.")
+
+        viewModel.email = "user@example.com"
+        viewModel.password = ""
+
+        await viewModel.signInTask()
+        #expect(viewModel.errorMessage == "Please enter your password.")
     }
 }
