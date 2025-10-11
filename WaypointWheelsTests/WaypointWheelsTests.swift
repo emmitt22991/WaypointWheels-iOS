@@ -94,7 +94,7 @@ struct APIClientTests {
         let client = APIClient(session: session, bundle: bundle)
 
         MockURLProtocol.requestHandler = { request in
-            #expect(request.url?.absoluteString == "https://example.com/api/login")
+            #expect(request.url?.absoluteString == "https://example.com/api/login/")
             #expect(request.httpMethod == "POST")
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             let body = "{""token"": ""abc"", ""user"": {""name"": ""Taylor""}}".data(using: .utf8)!
