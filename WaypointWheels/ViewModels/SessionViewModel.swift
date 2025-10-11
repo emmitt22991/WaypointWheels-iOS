@@ -34,32 +34,43 @@ final class SessionViewModel: ObservableObject {
         requestJSON = nil
         responseJSON = nil
 
-        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        let enteredPassword = password
+        let sanitizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentPassword = password
 
-        guard !normalizedEmail.isEmpty else {
+        guard !sanitizedEmail.isEmpty else {
             errorMessage = "Please enter your email address."
             isLoading = false
             return
         }
 
-        guard !enteredPassword.isEmpty else {
+        guard !currentPassword.isEmpty else {
+            errorMessage = "Please enter your password."
+            isLoading = false
+            return
+        }
+
+        let sanitizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentPassword = password
+
+        guard !sanitizedEmail.isEmpty else {
+            errorMessage = "Please enter your email address."
+            isLoading = false
+            return
+        }
+
+        guard !currentPassword.isEmpty else {
             errorMessage = "Please enter your password."
             isLoading = false
             return
         }
 
         do {
-            requestJSON = makeJSON(email: normalizedEmail, password: enteredPassword)
-
-            let response = try await apiClient.login(email: normalizedEmail, password: enteredPassword)
-            try keychainStore.save(token: response.value.token)
-            userName = response.value.user.name
-            email = normalizedEmail
-            responseJSON = response.rawString?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let response = try await apiClient.login(email: sanitizedEmail, password: currentPassword)
+            try keychainStore.save(token: response.token)
+            userName = response.user.name
+            email = sanitizedEmail
         } catch {
-            if let apiError = error as? APIClient.APIError,
-               case let .serverError(_, body) = apiError {
+            if case let APIClient.APIError.serverError(_, body) = error as? APIClient.APIError {
                 responseJSON = body
             }
             errorMessage = error.localizedDescription
