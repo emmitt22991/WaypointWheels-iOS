@@ -27,6 +27,32 @@ struct LoginView: View {
                     .font(.footnote)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+
+            if let requestJSON = viewModel.requestJSON, !requestJSON.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Request")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(requestJSON)
+                        .font(.system(.footnote, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+
+            if let responseJSON = viewModel.responseJSON, !responseJSON.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Response")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(responseJSON)
+                        .font(.system(.footnote, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .multilineTextAlignment(.leading)
+                }
+            }
         }
     }
 }

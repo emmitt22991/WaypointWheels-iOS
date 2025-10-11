@@ -7,12 +7,14 @@ final class SessionViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
     @Published var userName: String?
+    @Published var requestJSON: String?
+    @Published var responseJSON: String?
 
     private let apiClient: APIClient
-    private let keychainStore: KeychainStore
+    private let keychainStore: any KeychainStoring
 
     init(apiClient: APIClient = APIClient(),
-         keychainStore: KeychainStore = KeychainStore()) {
+         keychainStore: any KeychainStoring = KeychainStore()) {
         self.apiClient = apiClient
         self.keychainStore = keychainStore
     }
@@ -26,18 +28,55 @@ final class SessionViewModel: ObservableObject {
     }
 
     @MainActor
-    private func signInTask() async {
+    func signInTask() async {
         isLoading = true
         errorMessage = nil
+        requestJSON = nil
+        responseJSON = nil
+
+        let sanitizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentPassword = password
+
+        guard !sanitizedEmail.isEmpty else {
+            errorMessage = "Please enter your email address."
+            isLoading = false
+            return
+        }
+
+        guard !currentPassword.isEmpty else {
+            errorMessage = "Please enter your password."
+            isLoading = false
+            return
+        }
 
         do {
-            let response = try await apiClient.login(email: email, password: password)
-            try keychainStore.save(token: response.token)
-            userName = response.user.name
+            requestJSON = makeJSON(email: sanitizedEmail, password: currentPassword)
+
+            let response = try await apiClient.login(email: sanitizedEmail, password: currentPassword)
+            try keychainStore.save(token: response.value.token)
+            userName = response.value.user.name
+            email = sanitizedEmail
+            responseJSON = response.rawString?.trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
+            if case let APIClient.APIError.serverError(_, body) = error as? APIClient.APIError {
+                responseJSON = body
+            }
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
+    }
+
+    private func makeJSON(email: String, password: String) -> String? {
+        let payload: [String: String] = [
+            "email": email,
+            "password": password
+        ]
+
+        guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]) else {
+            return nil
+        }
+
+        return String(data: data, encoding: .utf8)
     }
 }
