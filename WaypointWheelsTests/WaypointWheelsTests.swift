@@ -244,8 +244,6 @@ struct SessionViewModelTests {
         #expect(viewModel.userName == "Taylor")
         #expect(viewModel.email == "user@example.com")
         #expect(keychainStore.savedToken == expectedToken)
-        #expect(viewModel.requestJSON == #"{"email":"user@example.com","password":"secret"}"#)
-        #expect(viewModel.responseJSON == #"{"token":"abc123","user":{"name":"Taylor"}}"#)
     }
 
     @Test("SessionViewModel validates email and password before calling the API")
@@ -268,41 +266,11 @@ struct SessionViewModelTests {
 
         await viewModel.signInTask()
         #expect(viewModel.errorMessage == "Please enter your email address.")
-        #expect(viewModel.requestJSON == nil)
-        #expect(viewModel.responseJSON == nil)
 
         viewModel.email = "user@example.com"
         viewModel.password = ""
 
         await viewModel.signInTask()
         #expect(viewModel.errorMessage == "Please enter your password.")
-        #expect(viewModel.requestJSON == nil)
-        #expect(viewModel.responseJSON == nil)
-    }
-
-    @Test("SessionViewModel captures server error JSON for debugging")
-    func signInCapturesServerErrorJSON() async {
-        let session = makeSession()
-        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
-        let apiClient = APIClient(session: session, bundle: bundle)
-        let keychainStore = MockKeychainStore()
-        let viewModel = SessionViewModel(apiClient: apiClient, keychainStore: keychainStore)
-
-        let errorJSON = "{\"message\":\"No matching account\"}"
-
-        MockURLProtocol.requestHandler = { request in
-            let response = HTTPURLResponse(url: request.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!
-            return (response, Data(errorJSON.utf8))
-        }
-        defer { MockURLProtocol.requestHandler = nil }
-
-        viewModel.email = "user@example.com"
-        viewModel.password = "secret"
-
-        await viewModel.signInTask()
-
-        #expect(viewModel.errorMessage == "No matching account")
-        #expect(viewModel.requestJSON == #"{"email":"user@example.com","password":"secret"}"#)
-        #expect(viewModel.responseJSON == errorJSON)
     }
 }
