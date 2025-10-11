@@ -8,21 +8,19 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var viewModel = HealthViewModel()
+    @StateObject private var sessionViewModel = SessionViewModel()
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
             Image(systemName: "globe")
                 .imageScale(.large)
                 .foregroundStyle(.tint)
 
-            if viewModel.isLoading {
-                Text("Status: (loading…)")
-            } else if let errorMessage = viewModel.errorMessage {
-                Text("Status: \(errorMessage)")
-            } else {
-                Text("Status: \(viewModel.status)")
+            if let name = sessionViewModel.userName {
+                Text("Status: OK — Hello, \(name)")
             }
+
+            LoginView(viewModel: sessionViewModel)
         }
         .padding()
     }

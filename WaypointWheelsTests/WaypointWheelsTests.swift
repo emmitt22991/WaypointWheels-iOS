@@ -86,6 +86,27 @@ struct APIClientTests {
 
         #expect(response.status == expectedStatus)
     }
+
+    @Test("APIClient login builds a POST request to /login")
+    func loginBuildsPostRequest() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let client = APIClient(session: session, bundle: bundle)
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == "https://example.com/api/login")
+            #expect(request.httpMethod == "POST")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let body = "{""token"": ""abc"", ""user"": {""name"": ""Taylor""}}".data(using: .utf8)!
+            return (response, body)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let response = try await client.login(email: "user@example.com", password: "secret")
+
+        #expect(response.token == "abc")
+        #expect(response.user.name == "Taylor")
+    }
 }
 
 struct HealthServiceTests {
