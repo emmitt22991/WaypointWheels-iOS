@@ -1,8 +1,9 @@
+import Combine
 import Foundation
 
 @MainActor
 final class ParksViewModel: ObservableObject {
-    enum MembershipFilter: Identifiable, CaseIterable {
+    enum MembershipFilter: Identifiable, Equatable {
         case all
         case membership(Park.Membership)
 
@@ -10,7 +11,7 @@ final class ParksViewModel: ObservableObject {
             switch self {
             case .all:
                 return "all"
-            case .membership(let membership):
+            case let .membership(membership):
                 return membership.rawValue
             }
         }
@@ -19,13 +20,20 @@ final class ParksViewModel: ObservableObject {
             switch self {
             case .all:
                 return "All Memberships"
-            case .membership(let membership):
+            case let .membership(membership):
                 return membership.rawValue
             }
         }
 
-        static var allCases: [ParksViewModel.MembershipFilter] {
-            [.all] + Park.Membership.allCases.map { .membership($0) }
+        static func == (lhs: MembershipFilter, rhs: MembershipFilter) -> Bool {
+            switch (lhs, rhs) {
+            case (.all, .all):
+                return true
+            case let (.membership(lhsValue), .membership(rhsValue)):
+                return lhsValue == rhsValue
+            default:
+                return false
+            }
         }
     }
 
@@ -76,20 +84,61 @@ final class ParksViewModel: ObservableObject {
         } else {
             parks.append(park)
         }
+        .store(in: &cancellables)
     }
 
-    private func matchesMembershipFilter(_ park: Park) -> Bool {
+    private func fetchParks() {
+        fetchTask?.cancel()
+
+        let trimmedSearch = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedSearch = trimmedSearch.isEmpty ? nil : trimmedSearch
+        let normalizedState = selectedState?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let membershipParameter: Park.Membership?
         switch selectedFilter {
         case .all:
-            return true
-        case .membership(let membership):
-            return park.memberships.contains(membership)
+            membershipParameter = nil
+        case let .membership(value):
+            membershipParameter = value
         }
-    }
+        let minimumRating = showFamilyFavoritesOnly ? 4.0 : nil
 
-    private func matchesRatingFilter(_ park: Park) -> Bool {
-        guard showFamilyFavoritesOnly else { return true }
-        return park.rating >= 4.0
+        fetchTask = Task { [weak self] in
+            guard let self else { return }
+
+            self.isLoading = true
+            self.error = nil
+
+            do {
+                let response = try await service.fetchParks(
+                    search: normalizedSearch,
+                    state: normalizedState?.isEmpty == true ? nil : normalizedState,
+                    membership: membershipParameter,
+                    minRating: minimumRating
+                )
+
+                self.filteredParks = response.parks
+                self.availableStates = response.availableStates
+                self.availableMemberships = response.availableMemberships
+                self.membershipFilters = [.all] + response.availableMemberships.map { MembershipFilter.membership($0) }
+
+                if let selectedState = self.selectedState,
+                   !response.availableStates.contains(selectedState) {
+                    self.selectedState = nil
+                }
+
+                if case let .membership(current) = self.selectedFilter,
+                   !response.availableMemberships.contains(current) {
+                    self.selectedFilter = .all
+                }
+
+                self.isLoading = false
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.filteredParks = []
+                self.isLoading = false
+                self.error = error.localizedDescription
+            }
+        }
     }
 
     private func matchesStateFilter(_ park: Park) -> Bool {

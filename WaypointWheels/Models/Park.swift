@@ -24,6 +24,17 @@ struct Park: Identifiable, Hashable, Decodable {
                 return Color(red: 0.36, green: 0.31, blue: 0.55)
             }
         }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            let rawValue = try container.decode(String.self)
+            self = Membership(rawValue: rawValue) ?? .independent
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode(rawValue)
+        }
     }
 
     struct Amenity: Identifiable, Hashable, Codable {
