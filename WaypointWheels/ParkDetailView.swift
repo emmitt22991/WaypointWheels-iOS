@@ -64,7 +64,7 @@ struct ParkDetailView: View {
         } message: {
             Text(viewModel.alertMessage ?? "")
         }
-        .onChange(of: selectedPhotoItem) { newValue in
+        .onChange(of: selectedPhotoItem) { _, newValue in
             loadPreview(for: newValue)
         }
     }
