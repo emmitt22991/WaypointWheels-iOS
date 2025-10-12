@@ -21,6 +21,14 @@ final class APIClient {
         }
     }
 
+    enum HTTPMethod: String {
+        case get = "GET"
+        case post = "POST"
+        case put = "PUT"
+        case patch = "PATCH"
+        case delete = "DELETE"
+    }
+
     private let session: URLSession
     private let bundle: Bundle
     private let encoder: JSONEncoder
@@ -40,9 +48,32 @@ final class APIClient {
     }
 
     func request<T: Decodable>(path: String) async throws -> T {
-        let url = try url(for: path)
-        var request = URLRequest(url: url)
-        applyAuthorization(to: &request)
+        try await request(path: path, method: .get)
+    }
+
+    func request<T: Decodable>(path: String, method: HTTPMethod, additionalHeaders: [String: String] = [:]) async throws -> T {
+        let request = try makeRequest(path: path, method: method, additionalHeaders: additionalHeaders)
+        return try await perform(request: request)
+    }
+
+    func request<T: Decodable, Body: Encodable>(path: String,
+                                                method: HTTPMethod,
+                                                body: Body,
+                                                additionalHeaders: [String: String] = [:]) async throws -> T {
+        var request = try makeRequest(path: path, method: method, additionalHeaders: additionalHeaders)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(body)
+        return try await perform(request: request)
+    }
+
+    func request<T: Decodable>(path: String,
+                               method: HTTPMethod,
+                               bodyData: Data,
+                               contentType: String,
+                               additionalHeaders: [String: String] = [:]) async throws -> T {
+        var request = try makeRequest(path: path, method: method, additionalHeaders: additionalHeaders)
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = bodyData
         return try await perform(request: request)
     }
 
@@ -90,6 +121,17 @@ final class APIClient {
         return url
     }
 
+    private func makeRequest(path: String,
+                              method: HTTPMethod,
+                              additionalHeaders: [String: String]) throws -> URLRequest {
+        let url = try url(for: path)
+        var request = URLRequest(url: url)
+        request.httpMethod = method.rawValue
+        additionalHeaders.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        applyAuthorization(to: &request)
+        return request
+    }
+
     private func requireBaseURL() throws -> URL {
         guard let value = bundle.object(forInfoDictionaryKey: "API_BASE_URL") as? String,
               !value.isEmpty else {
@@ -103,7 +145,7 @@ final class APIClient {
         return url
     }
 
-    private func perform<T: Decodable>(request: URLRequest) async throws -> T {
+    func perform<T: Decodable>(request: URLRequest) async throws -> T {
         try await performResponse(request: request).value
     }
 
