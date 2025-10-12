@@ -33,7 +33,7 @@ final class TripsService {
 
     func fetchCurrentItinerary() async throws -> [TripLeg] {
         do {
-            let response: ItineraryResponse = try await apiClient.request(path: "trips/current")
+            let response: ItineraryResponse = try await apiClient.request(path: "trips/current/")
             return response.legs
         } catch let error as APIClient.APIError {
             throw TripsError(apiError: error)
