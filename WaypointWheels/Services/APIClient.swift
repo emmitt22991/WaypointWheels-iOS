@@ -25,20 +25,24 @@ final class APIClient {
     private let bundle: Bundle
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    private let keychainStore: (any KeychainStoring)?
 
     init(session: URLSession = .shared,
          bundle: Bundle = .main,
          encoder: JSONEncoder = JSONEncoder(),
-         decoder: JSONDecoder = JSONDecoder()) {
+         decoder: JSONDecoder = JSONDecoder(),
+         keychainStore: (any KeychainStoring)? = KeychainStore()) {
         self.session = session
         self.bundle = bundle
         self.encoder = encoder
         self.decoder = decoder
+        self.keychainStore = keychainStore
     }
 
     func request<T: Decodable>(path: String) async throws -> T {
         let url = try url(for: path)
-        let request = URLRequest(url: url)
+        var request = URLRequest(url: url)
+        applyAuthorization(to: &request)
         return try await perform(request: request)
     }
 
@@ -125,6 +129,17 @@ final class APIClient {
 
         let decoded = try decoder.decode(T.self, from: data)
         return APIResponse(value: decoded, data: data)
+    }
+
+    private func applyAuthorization(to request: inout URLRequest) {
+        guard let token = authorizationToken() else { return }
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+    }
+
+    private func authorizationToken() -> String? {
+        guard let keychainStore = keychainStore else { return nil }
+        guard let token = try? keychainStore.fetchToken(), let token, !token.isEmpty else { return nil }
+        return token
     }
 
     private func decodeErrorMessage(from data: Data) -> String? {

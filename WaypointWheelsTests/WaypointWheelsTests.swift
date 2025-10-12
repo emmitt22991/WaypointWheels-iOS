@@ -166,6 +166,27 @@ struct APIClientTests {
         #expect(response.value.user.name == "Taylor")
         #expect(response.rawString == "{\"token\":\"abc\",\"user\":{\"name\":\"Taylor\"}}")
     }
+
+    @Test("APIClient attaches the stored bearer token to requests")
+    func requestIncludesAuthorizationHeader() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let keychain = MockKeychainStore()
+        try keychain.save(token: "secret-token")
+        let client = APIClient(session: session, bundle: bundle, keychainStore: keychain)
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer secret-token")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = "{""status"": ""ok""}".data(using: .utf8)!
+            return (response, data)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let response: SampleResponse = try await client.request(path: "health")
+
+        #expect(response.status == "ok")
+    }
 }
 
 struct HealthServiceTests {
