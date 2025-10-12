@@ -131,21 +131,38 @@ final class APIClient {
             throw APIError.invalidBaseURL(baseURL.absoluteString)
         }
 
-        let trimmedPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        var sanitizedPath = path.drop(while: { $0 == "/" })
+        var hasTrailingSlash = false
 
-        guard !trimmedPath.isEmpty else {
-            guard let url = components.url else {
+        while sanitizedPath.last == "/" {
+            hasTrailingSlash = true
+            sanitizedPath = sanitizedPath.dropLast()
+        }
+
+        let cleanedPath = String(sanitizedPath)
+
+        guard !cleanedPath.isEmpty else {
+            guard var url = components.url else {
                 throw APIError.invalidBaseURL(baseURL.absoluteString)
             }
+
+            if hasTrailingSlash {
+                url.appendPathComponent("")
+            }
+
             return url
         }
 
-        if components.path.isEmpty {
-            components.path = "/" + trimmedPath
+        if components.path.isEmpty || components.path == "/" {
+            components.path = "/" + cleanedPath
         } else if components.path.hasSuffix("/") {
-            components.path += trimmedPath
+            components.path += cleanedPath
         } else {
-            components.path += "/" + trimmedPath
+            components.path += "/" + cleanedPath
+        }
+
+        if hasTrailingSlash {
+            components.path += "/"
         }
 
         guard let url = components.url else {

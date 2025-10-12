@@ -167,6 +167,25 @@ struct APIClientTests {
         #expect(response.rawString == "{\"token\":\"abc\",\"user\":{\"name\":\"Taylor\"}}")
     }
 
+    @Test("APIClient preserves trailing slashes when building URLs")
+    func requestPreservesTrailingSlash() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let client = APIClient(session: session, bundle: bundle)
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == "https://example.com/api/trips/current/")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = "{\"status\": \"ok\"}".data(using: .utf8)!
+            return (response, data)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let response: SampleResponse = try await client.request(path: "trips/current/")
+
+        #expect(response.status == "ok")
+    }
+
     @Test("APIClient attaches the stored bearer token to requests")
     func requestIncludesAuthorizationHeader() async throws {
         let session = makeSession()
@@ -322,7 +341,7 @@ struct TripsServiceTests {
         """.data(using: .utf8)!
 
         MockURLProtocol.requestHandler = { request in
-            #expect(request.url?.absoluteString == "https://example.com/api/trips/current")
+            #expect(request.url?.absoluteString == "https://example.com/api/trips/current/")
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             return (response, payload)
         }
