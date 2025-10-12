@@ -9,6 +9,16 @@ struct DashboardView: View {
         Color(red: 1.0, green: 0.95, blue: 0.82)
     ], startPoint: .topLeading, endPoint: .bottomTrailing)
 
+    private let heroAccentGradient = LinearGradient(colors: [
+        Color(red: 0.42, green: 0.37, blue: 0.67),
+        Color(red: 0.25, green: 0.44, blue: 0.66)
+    ], startPoint: .leading, endPoint: .trailing)
+
+    private let heroBackgroundGradient = LinearGradient(colors: [
+        Color(red: 0.99, green: 0.96, blue: 0.90),
+        Color(red: 0.92, green: 0.96, blue: 0.98)
+    ], startPoint: .topLeading, endPoint: .bottomTrailing)
+
     private var isCompactWidth: Bool {
         horizontalSizeClass == .compact || horizontalSizeClass == nil
     }
@@ -23,10 +33,7 @@ struct DashboardView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            LinearGradient(colors: [
-                Color(red: 0.95, green: 0.96, blue: 0.99),
-                Color(red: 0.99, green: 0.95, blue: 0.89)
-            ], startPoint: .topLeading, endPoint: .bottomTrailing)
+            heroBackgroundGradient
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -294,61 +301,168 @@ struct DashboardView: View {
     }
 
     private var heroHeader: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Waypoint Wheels")
-                .font(.largeTitle)
-                .fontWeight(.heavy)
-                .tracking(1.5)
-            Text("Camp In Style")
-                .font(.title3)
-                .foregroundStyle(.secondary)
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 36, style: .continuous)
+                .fill(Color(red: 0.69, green: 0.86, blue: 0.92).opacity(0.45))
+                .offset(x: 16, y: 18)
+
+            RoundedRectangle(cornerRadius: 36, style: .continuous)
+                .fill(Color.white.opacity(0.96))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 36, style: .continuous)
+                        .stroke(Color(red: 0.22, green: 0.18, blue: 0.39), lineWidth: 3)
+                )
+                .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: 12)
+
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Camp In Style")
+                        .font(.headline)
+                        .foregroundStyle(Color(red: 0.23, green: 0.19, blue: 0.41))
+                        .textCase(.uppercase)
+                        .tracking(4)
+                    Text("Full-Time RV Life Made Easy")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Waypoint Wheels")
+                        .font(.system(size: 42, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Color(red: 0.12, green: 0.11, blue: 0.23))
+                        .tracking(2)
+                    Text("Camp in style and keep your crew rolling in sync across every adventure.")
+                        .font(.body)
+                        .foregroundStyle(Color.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(spacing: 16) {
+                    Button(action: {}) {
+                        Label("Plan Your Next Stop", systemImage: "suitcase.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 10)
+                            .background(heroAccentGradient, in: Capsule())
+                            .foregroundColor(.white)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: {}) {
+                        Label("Community Hub", systemImage: "person.3.sequence.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 10)
+                            .background(Color.white.opacity(0.9), in: Capsule())
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color(red: 0.25, green: 0.22, blue: 0.45).opacity(0.4), lineWidth: 1.5)
+                            )
+                            .foregroundStyle(Color(red: 0.25, green: 0.22, blue: 0.45))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.top, 52)
+            .padding(.horizontal, 28)
+            .padding(.bottom, 32)
         }
+        .overlay(alignment: .topLeading) {
+            Capsule(style: .continuous)
+                .fill(heroAccentGradient)
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.7), lineWidth: 1)
+                )
+                .frame(width: 200, height: 56)
+                .overlay(
+                    VStack(spacing: 2) {
+                        Text("Waypoint Wheels")
+                            .font(.callout)
+                            .fontWeight(.heavy)
+                            .tracking(3)
+                        Text("Camp In Style")
+                            .font(.caption2)
+                            .tracking(4)
+                            .opacity(0.8)
+                    }
+                    .foregroundColor(.white)
+                )
+                .offset(x: 28, y: -18)
+        }
+        .padding(.top, 18)
     }
 
     @ViewBuilder
     private var heroProfile: some View {
         if isCompactWidth {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 14) {
                 Text("Let's get this show on the road!")
                     .font(.footnote)
-                    .foregroundColor(Color(red: 0.36, green: 0.31, blue: 0.55))
+                    .foregroundColor(Color(red: 0.28, green: 0.23, blue: 0.52))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .multilineTextAlignment(.leading)
-                Capsule()
-                    .fill(accentGradient)
-                    .frame(maxWidth: 200, minHeight: 38)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(LinearGradient(colors: [
+                        Color(red: 1.0, green: 0.95, blue: 0.82),
+                        Color(red: 0.96, green: 0.82, blue: 0.74)
+                    ], startPoint: .topLeading, endPoint: .bottomTrailing))
                     .overlay(
-                        HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(Color(red: 0.94, green: 0.77, blue: 0.69), lineWidth: 1.5)
+                    )
+                    .frame(maxWidth: 220, minHeight: 48)
+                    .overlay(
+                        HStack(spacing: 10) {
                             Image(systemName: "person.crop.circle.fill")
+                                .font(.title2)
                                 .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
-                            Text(userName)
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(Color(red: 0.28, green: 0.23, blue: 0.52))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(userName)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                Text("Account Profile")
+                                    .font(.caption2)
+                                    .foregroundStyle(Color(red: 0.44, green: 0.35, blue: 0.44))
+                            }
+                            .foregroundColor(Color(red: 0.28, green: 0.23, blue: 0.52))
                         }
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, 14)
                     )
             }
         } else {
-            VStack(alignment: .trailing, spacing: 8) {
+            VStack(alignment: .trailing, spacing: 14) {
                 Text("Let's get this show on the road!")
                     .font(.footnote)
-                    .foregroundColor(Color(red: 0.36, green: 0.31, blue: 0.55))
-                    .frame(maxWidth: 160)
+                    .foregroundColor(Color(red: 0.28, green: 0.23, blue: 0.52))
+                    .frame(maxWidth: 180)
                     .multilineTextAlignment(.trailing)
-                Capsule()
-                    .fill(accentGradient)
-                    .frame(width: 130, height: 38)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(LinearGradient(colors: [
+                        Color(red: 1.0, green: 0.95, blue: 0.82),
+                        Color(red: 0.96, green: 0.82, blue: 0.74)
+                    ], startPoint: .topLeading, endPoint: .bottomTrailing))
                     .overlay(
-                        HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(Color(red: 0.94, green: 0.77, blue: 0.69), lineWidth: 1.5)
+                    )
+                    .frame(width: 200, height: 56)
+                    .overlay(
+                        HStack(spacing: 10) {
                             Image(systemName: "person.crop.circle.fill")
+                                .font(.title2)
                                 .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
-                            Text(userName)
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(Color(red: 0.28, green: 0.23, blue: 0.52))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(userName)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                Text("Account Profile")
+                                    .font(.caption2)
+                                    .foregroundStyle(Color(red: 0.44, green: 0.35, blue: 0.44))
+                            }
+                            .foregroundColor(Color(red: 0.28, green: 0.23, blue: 0.52))
                         }
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, 16)
                     )
             }
         }
