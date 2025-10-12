@@ -27,6 +27,14 @@ final class ParksService {
         self.apiClient = apiClient
     }
 
+    func fetchParks() async throws -> [Park] {
+        do {
+            return try await apiClient.request(path: "api/parks")
+        } catch let error as APIClient.APIError {
+            throw ParksServiceError(apiError: error)
+        }
+    }
+
     func fetchParkDetail(parkID: UUID) async throws -> ParkDetail {
         do {
             return try await apiClient.request(path: "api/parks/\(parkID.uuidString)")

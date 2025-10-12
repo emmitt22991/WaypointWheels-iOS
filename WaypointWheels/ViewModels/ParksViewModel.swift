@@ -38,6 +38,9 @@ final class ParksViewModel: ObservableObject {
     }
 
     @Published private(set) var parks: [Park]
+    @Published private(set) var isLoading = false
+    @Published private(set) var loadError: Error?
+    @Published private(set) var hasLoadedParks: Bool
     @Published var selectedFilter: MembershipFilter = .all
     @Published var showFamilyFavoritesOnly = false
     @Published var selectedState: String?
@@ -45,9 +48,29 @@ final class ParksViewModel: ObservableObject {
 
     private let parksService: ParksService
 
-    init(parks: [Park] = Park.sampleData, parksService: ParksService = ParksService()) {
+    init(parks: [Park] = [], parksService: ParksService = ParksService()) {
         self.parks = parks
         self.parksService = parksService
+        self.hasLoadedParks = !parks.isEmpty
+        self.loadError = nil
+    }
+
+    func loadParks(forceReload: Bool = false) async {
+        guard !isLoading else { return }
+        if hasLoadedParks && !forceReload { return }
+
+        isLoading = true
+        loadError = nil
+
+        do {
+            let parks = try await parksService.fetchParks()
+            self.parks = parks
+            hasLoadedParks = true
+        } catch {
+            loadError = error
+        }
+
+        isLoading = false
     }
 
     var availableStates: [String] {
