@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct ParksView: View {
     @StateObject private var viewModel: ParksViewModel
 
