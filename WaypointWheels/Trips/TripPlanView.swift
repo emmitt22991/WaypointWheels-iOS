@@ -232,6 +232,6 @@ private struct LocationDetailView: View {
 
 #Preview {
     NavigationStack {
-        TripPlanView(legs: TripLeg.sample)
+        TripPlanView(legs: TripLeg.previewData)
     }
 }

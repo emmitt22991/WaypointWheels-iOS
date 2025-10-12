@@ -1,15 +1,18 @@
 import SwiftUI
-import MapKit
 
 struct TripsView: View {
-    @State private var itinerary: [TripLeg] = TripLeg.sample
+    @StateObject private var viewModel: TripsViewModel
     @State private var showDeleteConfirmation: TripLeg?
+
+    init(viewModel: TripsViewModel = TripsViewModel()) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
 
     var body: some View {
         List {
             Section {
                 NavigationLink {
-                    TripPlanView(legs: itinerary)
+                    TripPlanView(legs: viewModel.itinerary)
                 } label: {
                     tripPlanButton
                 }
@@ -17,16 +20,20 @@ struct TripsView: View {
             }
             .textCase(nil)
 
-            if itinerary.isEmpty {
+            if viewModel.isLoading {
+                loadingState
+            } else if let errorMessage = viewModel.errorMessage {
+                errorState(message: errorMessage)
+            } else if viewModel.itinerary.isEmpty {
                 emptyState
                     .listRowBackground(Color.clear)
             } else {
                 Section(header: Text("Itinerary")) {
-                    ForEach(Array(itinerary.enumerated()), id: \.element.id) { index, leg in
+                    ForEach(Array(viewModel.itinerary.enumerated()), id: \.element.id) { index, leg in
                         TimelineRow(
                             leg: leg,
                             isFirst: index == 0,
-                            isLast: index == itinerary.count - 1
+                            isLast: index == viewModel.itinerary.count - 1
                         )
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
@@ -63,12 +70,18 @@ struct TripsView: View {
         ) { leg in
             Button("Delete Leg", role: .destructive) {
                 withAnimation(.easeInOut) {
-                    itinerary.removeAll { $0.id == leg.id }
+                    viewModel.removeLeg(leg)
                 }
             }
             Button("Cancel", role: .cancel) { }
         } message: { leg in
             Text("\(leg.start.name) to \(leg.end.name) will be removed from your route.")
+        }
+        .task {
+            await viewModel.loadItinerary()
+        }
+        .refreshable {
+            await viewModel.loadItinerary(forceReload: true)
         }
     }
 
@@ -99,6 +112,42 @@ struct TripsView: View {
         }
         .padding(.vertical, 8)
         .contentShape(Rectangle())
+    }
+
+    private var loadingState: some View {
+        HStack {
+            Spacer()
+            ProgressView("Loading itinerary…")
+                .padding(.vertical, 24)
+            Spacer()
+        }
+        .listRowBackground(Color.clear)
+    }
+
+    private func errorState(message: String) -> some View {
+        VStack(alignment: .center, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(Color.orange)
+            Text("We couldn't load your trip")
+                .font(.headline)
+            Text(message)
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+            Button {
+                Task {
+                    await viewModel.loadItinerary(forceReload: true)
+                }
+            } label: {
+                Text("Try Again")
+                    .fontWeight(.semibold)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+        .listRowBackground(Color.clear)
     }
 
     private var emptyState: some View {
@@ -198,6 +247,6 @@ private struct TimelineRow: View {
 
 #Preview {
     NavigationStack {
-        TripsView()
+        TripsView(viewModel: TripsViewModel(initialItinerary: TripLeg.previewData))
     }
 }
