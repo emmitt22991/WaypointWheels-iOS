@@ -13,8 +13,10 @@ struct ContentView: View {
     var body: some View {
         Group {
             if sessionViewModel.isAuthenticated, let name = sessionViewModel.userName {
-                DashboardView(userName: name)
-                    .transition(.opacity.combined(with: .scale))
+                NavigationStack {
+                    DashboardView(userName: name)
+                }
+                .transition(.opacity.combined(with: .scale))
             } else {
                 NavigationStack {
                     ZStack {
