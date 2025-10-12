@@ -1,4 +1,5 @@
 import Foundation
+import LocalAuthentication
 
 @MainActor
 final class SessionViewModel: ObservableObject {
@@ -8,14 +9,52 @@ final class SessionViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var userName: String?
     @Published var isAuthenticated: Bool = false
+    @Published var canUseBiometricLogin: Bool = false
+
+    var biometricButtonTitle: String {
+        switch biometricType {
+        case .faceID:
+            return "Sign In with Face ID"
+        case .touchID:
+            return "Sign In with Touch ID"
+        default:
+            return "Sign In Securely"
+        }
+    }
+
+    var biometricButtonIcon: String {
+        switch biometricType {
+        case .faceID:
+            return "faceid"
+        case .touchID:
+            return "touchid"
+        default:
+            return "lock.fill"
+        }
+    }
 
     private let apiClient: APIClient
     private let keychainStore: any KeychainStoring
+    private let userDefaults: UserDefaults
+    private let makeAuthContext: () -> LAContext
+    private var storedToken: String?
+    private var biometricType: LABiometryType = .none
+
+    private enum DefaultsKeys {
+        static let email = "com.stepstonetexas.waypointwheels.email"
+        static let name = "com.stepstonetexas.waypointwheels.name"
+    }
 
     init(apiClient: APIClient = APIClient(),
-         keychainStore: any KeychainStoring = KeychainStore()) {
+         keychainStore: any KeychainStoring = KeychainStore(),
+         userDefaults: UserDefaults = .standard,
+         makeAuthContext: @escaping () -> LAContext = { LAContext() }) {
         self.apiClient = apiClient
         self.keychainStore = keychainStore
+        self.userDefaults = userDefaults
+        self.makeAuthContext = makeAuthContext
+
+        configureStoredSession()
     }
 
     func signIn() {
@@ -50,13 +89,125 @@ final class SessionViewModel: ObservableObject {
         do {
             let response = try await apiClient.login(email: sanitizedEmail, password: currentPassword)
             try keychainStore.save(token: response.value.token)
+            storedToken = response.value.token
             userName = response.value.user.name
             email = sanitizedEmail
+            password = ""
+            persist(userName: response.value.user.name, email: sanitizedEmail)
+            updateBiometricAvailability()
             isAuthenticated = true
         } catch {
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
+    }
+
+    func authenticateWithBiometrics() {
+        Task { [weak self] in
+            await self?.performBiometricAuthentication(isAutomatic: false)
+        }
+    }
+
+    private func configureStoredSession() {
+        do {
+            storedToken = try keychainStore.fetchToken()
+            canUseBiometricLogin = storedToken != nil
+            updateBiometricAvailability()
+            if storedToken != nil {
+                Task { [weak self] in
+                    await self?.performBiometricAuthentication(isAutomatic: true)
+                }
+            }
+        } catch {
+            storedToken = nil
+            canUseBiometricLogin = false
+        }
+    }
+
+    private func persist(userName: String, email: String) {
+        userDefaults.set(userName, forKey: DefaultsKeys.name)
+        userDefaults.set(email, forKey: DefaultsKeys.email)
+    }
+
+    private func restorePersistedProfile() {
+        if let storedName = userDefaults.string(forKey: DefaultsKeys.name) {
+            userName = storedName
+        }
+
+        if let storedEmail = userDefaults.string(forKey: DefaultsKeys.email) {
+            email = storedEmail
+        }
+    }
+
+    private func updateBiometricAvailability() {
+        guard storedToken != nil else {
+            canUseBiometricLogin = false
+            biometricType = .none
+            return
+        }
+
+        let context = makeAuthContext()
+        var error: NSError?
+
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+            biometricType = context.biometryType
+            canUseBiometricLogin = true
+        } else if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) {
+            biometricType = context.biometryType
+            canUseBiometricLogin = true
+        } else {
+            biometricType = context.biometryType
+            canUseBiometricLogin = false
+        }
+    }
+
+    private func performBiometricAuthentication(isAutomatic: Bool) async {
+        guard storedToken != nil else {
+            canUseBiometricLogin = false
+            return
+        }
+
+        let context = makeAuthContext()
+        var authError: NSError?
+        var policy: LAPolicy = .deviceOwnerAuthenticationWithBiometrics
+
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &authError) {
+            biometricType = context.biometryType
+        } else if context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &authError) {
+            biometricType = context.biometryType
+            policy = .deviceOwnerAuthentication
+        } else {
+            biometricType = context.biometryType
+            canUseBiometricLogin = false
+            if !isAutomatic, let authError {
+                errorMessage = authError.localizedDescription
+            }
+            return
+        }
+
+        do {
+            let success = try await context.evaluatePolicy(policy, localizedReason: "Authenticate to access Waypoint Wheels.")
+            if success {
+                completeBiometricLogin()
+            } else if !isAutomatic {
+                errorMessage = "Authentication failed."
+            }
+        } catch {
+            if isAutomatic, let laError = error as? LAError,
+               [.userCancel, .systemCancel, .appCancel].contains(laError.code) {
+                return
+            }
+
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func completeBiometricLogin() {
+        restorePersistedProfile()
+        password = ""
+        isAuthenticated = true
+        errorMessage = nil
+        canUseBiometricLogin = true
     }
 }
