@@ -1,7 +1,7 @@
 import SwiftUI
 
-struct Park: Identifiable, Hashable {
-    enum Membership: String, CaseIterable, Identifiable {
+struct Park: Identifiable, Hashable, Decodable {
+    enum Membership: String, CaseIterable, Identifiable, Codable {
         case thousandTrails = "Thousand Trails"
         case koa = "KOA"
         case harvestHosts = "Harvest Hosts"
@@ -26,13 +26,19 @@ struct Park: Identifiable, Hashable {
         }
     }
 
-    struct Amenity: Identifiable, Hashable {
-        let id = UUID()
+    struct Amenity: Identifiable, Hashable, Codable {
+        let id: UUID
         let name: String
         let systemImage: String
+
+        init(id: UUID = UUID(), name: String, systemImage: String) {
+            self.id = id
+            self.name = name
+            self.systemImage = systemImage
+        }
     }
 
-    let id = UUID()
+    let id: UUID
     let name: String
     let state: String
     let city: String
@@ -42,8 +48,40 @@ struct Park: Identifiable, Hashable {
     let amenities: [Amenity]
     let featuredNotes: [String]
 
+    init(id: UUID = UUID(),
+         name: String,
+         state: String,
+         city: String,
+         rating: Double,
+         description: String,
+         memberships: [Membership],
+         amenities: [Amenity],
+         featuredNotes: [String]) {
+        self.id = id
+        self.name = name
+        self.state = state
+        self.city = city
+        self.rating = rating
+        self.description = description
+        self.memberships = memberships
+        self.amenities = amenities
+        self.featuredNotes = featuredNotes
+    }
+
     var formattedLocation: String {
         "\(city), \(state)"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case state
+        case city
+        case rating
+        case description
+        case memberships
+        case amenities
+        case featuredNotes = "featured_notes"
     }
 
     static let sampleData: [Park] = [
