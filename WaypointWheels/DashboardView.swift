@@ -3,6 +3,8 @@ import SwiftUI
 struct DashboardView: View {
     let userName: String
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @StateObject private var checklistsViewModel = ChecklistsViewModel()
+    @State private var showingChecklists = false
 
     private let accentGradient = LinearGradient(colors: [
         Color(red: 0.98, green: 0.88, blue: 0.63),
@@ -51,6 +53,9 @@ struct DashboardView: View {
 
                 bottomNavigation
             }
+        }
+        .sheet(isPresented: $showingChecklists) {
+            ChecklistsView(viewModel: checklistsViewModel)
         }
     }
 
@@ -121,20 +126,47 @@ struct DashboardView: View {
                     }
                 }
 
-                DashboardCard(title: "Checklist", subtitle: "Day-Before Tasks", accent: accentGradient) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        checklistRow(title: "Confirm campground reservation", isComplete: true)
-                        checklistRow(title: "Top off fresh water tanks", isComplete: false)
-                        checklistRow(title: "Stow patio setup", isComplete: false)
-                        Button(action: {}) {
-                            Label("Open Full Checklist", systemImage: "list.bullet.rectangle")
+                DashboardCard(title: "Checklist", subtitle: featuredChecklistSubtitle, accent: accentGradient) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let checklist = checklistsViewModel.featuredChecklist {
+                            if checklist.items.isEmpty {
+                                Text("Start adding tasks to keep your crew organized.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                VStack(spacing: 10) {
+                                    ForEach(checklist.items.prefix(3)) { item in
+                                        checklistRow(item: item)
+                                    }
+
+                                    if checklist.items.count > 3 {
+                                        Text("+\(checklist.items.count - 3) more items")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+
+                                    Text(checklist.completionSummary)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+                        } else {
+                            Text("Build reusable lists for packing, setup, and maintenance. We'll keep them handy here.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Button(action: { showingChecklists = true }) {
+                            Label("Open Checklists", systemImage: "list.bullet.rectangle")
                                 .font(.footnote)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
                                 .background(Color.white.opacity(0.85), in: Capsule())
                         }
                         .buttonStyle(.plain)
-                        .padding(.top, 6)
+                        .padding(.top, 2)
                     }
                 }
             }
@@ -508,18 +540,36 @@ struct DashboardView: View {
         }
     }
 
-    private func checklistRow(title: String, isComplete: Bool) -> some View {
+    private func checklistRow(item: Checklist.Item) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: isComplete ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(isComplete ? Color.green : Color.secondary)
-            Text(title)
-                .font(.footnote)
-                .foregroundStyle(.primary)
+            Image(systemName: item.isComplete ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(item.isComplete ? Color.green : Color.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.footnote)
+                    .foregroundStyle(.primary)
+
+                if !item.notes.isEmpty {
+                    Text(item.notes)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .font(.footnote)
             Spacer()
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 12)
         .background(Color.white.opacity(0.85), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var featuredChecklistSubtitle: String {
+        if let title = checklistsViewModel.featuredChecklist?.title, !title.isEmpty {
+            return title
+        }
+
+        return "Your travel tasks"
     }
 
     private func statRow(label: String, value: String, footnote: String) -> some View {
