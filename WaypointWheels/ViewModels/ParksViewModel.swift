@@ -37,39 +37,52 @@ final class ParksViewModel: ObservableObject {
         }
     }
 
-    @Published private(set) var filteredParks: [Park] = []
-    @Published private(set) var availableStates: [String] = []
-    @Published private(set) var availableMemberships: [Park.Membership] = []
-    @Published private(set) var membershipFilters: [MembershipFilter] = [.all]
-
-    @Published var searchQuery: String = ""
-    @Published var selectedState: String?
+    @Published private(set) var parks: [Park]
     @Published var selectedFilter: MembershipFilter = .all
     @Published var showFamilyFavoritesOnly = false
-    @Published var isLoading: Bool = false
-    @Published var error: String?
+    @Published var selectedState: String?
+    @Published var searchText: String = ""
 
-    private let service: ParksService
-    private var cancellables = Set<AnyCancellable>()
-    private var fetchTask: Task<Void, Never>?
+    private let parksService: ParksService
 
-    init(service: ParksService = ParksService()) {
-        self.service = service
-        configureBindings()
-        fetchParks()
+    init(parks: [Park] = Park.sampleData, parksService: ParksService = ParksService()) {
+        self.parks = parks
+        self.parksService = parksService
     }
 
-    private func configureBindings() {
-        Publishers.CombineLatest4(
-            $searchQuery.removeDuplicates(),
-            $selectedState.removeDuplicates(),
-            $selectedFilter.removeDuplicates(),
-            $showFamilyFavoritesOnly.removeDuplicates()
-        )
-        .dropFirst()
-        .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
-        .sink { [weak self] _ in
-            self?.fetchParks()
+    var availableStates: [String] {
+        let states = Set(parks.map { $0.state })
+        return states.sorted()
+    }
+
+    var filteredParks: [Park] {
+        parks
+            .filter { matchesMembershipFilter($0) }
+            .filter { matchesRatingFilter($0) }
+            .filter { matchesStateFilter($0) }
+            .filter { matchesSearch($0) }
+            .sorted { lhs, rhs in
+                if showFamilyFavoritesOnly {
+                    return lhs.rating == rhs.rating ? lhs.name < rhs.name : lhs.rating > rhs.rating
+                } else {
+                    return lhs.name < rhs.name
+                }
+            }
+    }
+
+    func makeDetailViewModel(for park: Park) -> ParkDetailViewModel {
+        ParkDetailViewModel(parkID: park.id,
+                            initialSummary: park,
+                            service: parksService) { [weak self] updatedPark in
+            self?.replacePark(with: updatedPark)
+        }
+    }
+
+    func replacePark(with park: Park) {
+        if let index = parks.firstIndex(where: { $0.id == park.id }) {
+            parks[index] = park
+        } else {
+            parks.append(park)
         }
         .store(in: &cancellables)
     }
@@ -126,5 +139,19 @@ final class ParksViewModel: ObservableObject {
                 self.error = error.localizedDescription
             }
         }
+    }
+
+    private func matchesStateFilter(_ park: Park) -> Bool {
+        guard let selectedState else { return true }
+        return park.state == selectedState
+    }
+
+    private func matchesSearch(_ park: Park) -> Bool {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return true }
+
+        let needle = trimmed.lowercased()
+        let haystacks = [park.name, park.city, park.state]
+        return haystacks.contains { $0.lowercased().contains(needle) }
     }
 }

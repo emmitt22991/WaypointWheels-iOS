@@ -1,0 +1,26 @@
+{
+  "checklist": {
+    "id": "22222222-2222-2222-2222-222222222222",
+    "title": "Camp Setup",
+    "description": "",
+    "items": [
+      {
+        "id": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+        "title": "Check stabilizers",
+        "notes": "",
+        "is_complete": false,
+        "position": 0
+      }
+    ],
+    "assigned_members": [
+      {
+        "id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        "name": "Avery"
+      },
+      {
+        "id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+        "name": "Jordan"
+      }
+    ]
+  }
+}
