@@ -26,7 +26,7 @@ final class TripsViewModel: ObservableObject {
             itinerary = try await service.fetchCurrentItinerary()
             hasLoaded = true
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
 
         isLoading = false

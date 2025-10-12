@@ -23,7 +23,7 @@ final class HealthViewModel: ObservableObject {
             let status = try await healthService.fetchHealthStatus()
             self.status = status
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
 
         isLoading = false

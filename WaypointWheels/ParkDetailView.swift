@@ -459,7 +459,7 @@ struct ParkDetailView: View {
                 }
             } catch {
                 await MainActor.run {
-                    viewModel.alertMessage = error.localizedDescription
+                    viewModel.alertMessage = error.userFacingMessage
                 }
             }
         }

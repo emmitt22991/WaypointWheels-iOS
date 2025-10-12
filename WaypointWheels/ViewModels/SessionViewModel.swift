@@ -97,7 +97,7 @@ final class SessionViewModel: ObservableObject {
             updateBiometricAvailability()
             isAuthenticated = true
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
 
         isLoading = false
@@ -181,7 +181,7 @@ final class SessionViewModel: ObservableObject {
             biometricType = context.biometryType
             canUseBiometricLogin = false
             if !isAutomatic, let authError {
-                errorMessage = authError.localizedDescription
+                errorMessage = authError.userFacingMessage
             }
             return
         }
@@ -199,7 +199,7 @@ final class SessionViewModel: ObservableObject {
                 return
             }
 
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
     }
 
