@@ -250,6 +250,187 @@ struct HealthServiceTests {
     }
 }
 
+struct TripsServiceTests {
+    private func makeSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    @Test("TripsService requests the current itinerary and decodes legs")
+    func fetchCurrentItineraryRequestsTripsEndpoint() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = TripsService(apiClient: apiClient)
+
+        let payload = """
+        {
+            "legs": [
+                {
+                    "id": "leg-1",
+                    "day_label": "Leg 1",
+                    "date_range_description": "Mon · Apr 14",
+                    "start": {
+                        "id": "loc-austin",
+                        "name": "Austin, TX",
+                        "description": "Pecan Grove RV Park",
+                        "coordinate": {
+                            "latitude": 30.2747,
+                            "longitude": -97.7404
+                        }
+                    },
+                    "end": {
+                        "id": "loc-waco",
+                        "name": "Waco, TX",
+                        "description": "Riverview Resort",
+                        "coordinate": {
+                            "latitude": 31.5493,
+                            "longitude": -97.1467
+                        }
+                    },
+                    "distance_in_miles": 102,
+                    "estimated_drive_time": "1 hr 45 min",
+                    "highlights": [
+                        "Arrive by lunch for a riverside picnic"
+                    ],
+                    "notes": "Campground has limited shade — plan for awning setup."
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == "https://example.com/api/trips/current")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, payload)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let itinerary = try await service.fetchCurrentItinerary()
+
+        #expect(itinerary.count == 1)
+        let leg = try #require(itinerary.first)
+        #expect(leg.id == "leg-1")
+        #expect(leg.start.id == "loc-austin")
+        #expect(abs(leg.start.coordinate.latitude - 30.2747) < 0.0001)
+        #expect(abs(leg.end.coordinate.longitude + 97.1467) < 0.0001)
+        #expect(leg.highlights == ["Arrive by lunch for a riverside picnic"])
+    }
+
+    @Test("TripsService maps APIClient errors into TripsError")
+    func fetchCurrentItineraryMapsErrors() async {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = TripsService(apiClient: apiClient)
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!
+            let data = "{""message"": ""Trips unavailable""}".data(using: .utf8)!
+            return (response, data)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        do {
+            _ = try await service.fetchCurrentItinerary()
+            #expect(false, "Expected fetchCurrentItinerary to throw")
+        } catch let error as TripsService.TripsError {
+            #expect(error == .serverError("Trips unavailable"))
+        } catch {
+            #expect(false, "Unexpected error: \(error)")
+        }
+    }
+}
+
+@MainActor
+struct TripsViewModelTests {
+    private func makeSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+
+    @Test("TripsViewModel loads itinerary and updates published state")
+    func loadItineraryPublishesLegs() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = TripsService(apiClient: apiClient)
+        let viewModel = TripsViewModel(service: service)
+
+        let payload = """
+        {
+            "legs": [
+                {
+                    "id": "leg-42",
+                    "day_label": "Leg 42",
+                    "date_range_description": "Fri · May 2",
+                    "start": {
+                        "id": "loc-start",
+                        "name": "Start",
+                        "description": "First stop",
+                        "coordinate": {"latitude": 1.0, "longitude": 2.0}
+                    },
+                    "end": {
+                        "id": "loc-end",
+                        "name": "End",
+                        "description": "Final stop",
+                        "coordinate": {"latitude": 3.0, "longitude": 4.0}
+                    },
+                    "distance_in_miles": 10,
+                    "estimated_drive_time": "15 min",
+                    "highlights": ["Highlight"],
+                    "notes": null
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, payload)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let task = Task {
+            await viewModel.loadItinerary(forceReload: true)
+        }
+
+        await Task.yield()
+        #expect(viewModel.isLoading)
+
+        await task.value
+
+        #expect(!viewModel.isLoading)
+        #expect(viewModel.errorMessage == nil)
+        #expect(viewModel.itinerary.count == 1)
+        #expect(viewModel.itinerary.first?.id == "leg-42")
+    }
+
+    @Test("TripsViewModel surfaces errors from the service")
+    func loadItineraryPublishesErrors() async {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = TripsService(apiClient: apiClient)
+        let viewModel = TripsViewModel(service: service)
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!
+            let data = "{""message"": ""Network down""}".data(using: .utf8)!
+            return (response, data)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        await viewModel.loadItinerary(forceReload: true)
+
+        #expect(!viewModel.isLoading)
+        #expect(viewModel.itinerary.isEmpty)
+        #expect(viewModel.errorMessage == "Network down")
+    }
+}
+
 @MainActor
 struct SessionViewModelTests {
     private func makeSession() -> URLSession {
