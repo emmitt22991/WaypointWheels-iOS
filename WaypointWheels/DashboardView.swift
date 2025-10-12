@@ -323,17 +323,21 @@ struct DashboardView: View {
                 }
                 .buttonStyle(.plain)
 
-                Button(action: {}) {
+                Button(action: {
+                    isShowingParks = true
+                }) {
                     bottomNavItem(label: "Parks", systemImage: "leaf")
                 }
                 .buttonStyle(.plain)
 
                 Button(action: {}) {
-                    bottomNavItem(label: "Community", systemImage: "person.3")
+                    bottomNavItem(label: "Hub", systemImage: "person.3")
                 }
                 .buttonStyle(.plain)
 
-                Button(action: {}) {
+                Button(action: {
+                    showingChecklists = true
+                }) {
                     bottomNavItem(label: "Checklists", systemImage: "checklist")
                 }
                 .buttonStyle(.plain)
