@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DashboardView: View {
     let userName: String
+    @State private var isShowingParks = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let accentGradient = LinearGradient(colors: [
@@ -209,7 +210,9 @@ struct DashboardView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                 Spacer()
-                Button(action: {}) {
+                Button(action: {
+                    isShowingParks = true
+                }) {
                     Label("Browse All Parks", systemImage: "leaf")
                         .font(.subheadline)
                         .padding(.horizontal, 16)
@@ -228,6 +231,9 @@ struct DashboardView: View {
                 }
                 .padding(.vertical, 4)
             }
+        }
+        .sheet(isPresented: $isShowingParks) {
+            ParksView()
         }
     }
 
