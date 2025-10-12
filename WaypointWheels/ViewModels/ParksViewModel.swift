@@ -55,6 +55,12 @@ final class ParksViewModel: ObservableObject {
         return states.sorted()
     }
 
+    var membershipFilters: [MembershipFilter] {
+        let memberships = Set(parks.flatMap { $0.memberships })
+        let sortedMemberships = memberships.sorted { $0.rawValue < $1.rawValue }
+        return [.all] + sortedMemberships.map { MembershipFilter.membership($0) }
+    }
+
     var filteredParks: [Park] {
         parks
             .filter { matchesMembershipFilter($0) }
@@ -84,66 +90,25 @@ final class ParksViewModel: ObservableObject {
         } else {
             parks.append(park)
         }
-        .store(in: &cancellables)
-    }
-
-    private func fetchParks() {
-        fetchTask?.cancel()
-
-        let trimmedSearch = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedSearch = trimmedSearch.isEmpty ? nil : trimmedSearch
-        let normalizedState = selectedState?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let membershipParameter: Park.Membership?
-        switch selectedFilter {
-        case .all:
-            membershipParameter = nil
-        case let .membership(value):
-            membershipParameter = value
-        }
-        let minimumRating = showFamilyFavoritesOnly ? 4.0 : nil
-
-        fetchTask = Task { [weak self] in
-            guard let self else { return }
-
-            self.isLoading = true
-            self.error = nil
-
-            do {
-                let response = try await service.fetchParks(
-                    search: normalizedSearch,
-                    state: normalizedState?.isEmpty == true ? nil : normalizedState,
-                    membership: membershipParameter,
-                    minRating: minimumRating
-                )
-
-                self.filteredParks = response.parks
-                self.availableStates = response.availableStates
-                self.availableMemberships = response.availableMemberships
-                self.membershipFilters = [.all] + response.availableMemberships.map { MembershipFilter.membership($0) }
-
-                if let selectedState = self.selectedState,
-                   !response.availableStates.contains(selectedState) {
-                    self.selectedState = nil
-                }
-
-                if case let .membership(current) = self.selectedFilter,
-                   !response.availableMemberships.contains(current) {
-                    self.selectedFilter = .all
-                }
-
-                self.isLoading = false
-            } catch {
-                guard !Task.isCancelled else { return }
-                self.filteredParks = []
-                self.isLoading = false
-                self.error = error.localizedDescription
-            }
-        }
     }
 
     private func matchesStateFilter(_ park: Park) -> Bool {
         guard let selectedState else { return true }
         return park.state == selectedState
+    }
+
+    private func matchesMembershipFilter(_ park: Park) -> Bool {
+        switch selectedFilter {
+        case .all:
+            return true
+        case let .membership(membership):
+            return park.memberships.contains(membership)
+        }
+    }
+
+    private func matchesRatingFilter(_ park: Park) -> Bool {
+        guard showFamilyFavoritesOnly else { return true }
+        return park.rating >= 4.0
     }
 
     private func matchesSearch(_ park: Park) -> Bool {
