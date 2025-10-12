@@ -120,7 +120,7 @@ final class APIClient {
                 throw APIError.serverError(message: message, body: rawBody)
             }
 
-            if let rawBody, !rawBody.isEmpty {
+            if let rawBody = rawBody, !rawBody.isEmpty {
                 throw APIError.serverError(message: rawBody, body: rawBody)
             }
 
