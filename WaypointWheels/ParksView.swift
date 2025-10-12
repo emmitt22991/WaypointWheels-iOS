@@ -4,8 +4,12 @@ import SwiftUI
 struct ParksView: View {
     @StateObject private var viewModel: ParksViewModel
 
-    init(viewModel: @autoclosure @MainActor () -> ParksViewModel = ParksViewModel()) {
-        _viewModel = StateObject(wrappedValue: viewModel())
+    init(viewModel: ParksViewModel) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
+
+    init() {
+        self.init(viewModel: ParksViewModel())
     }
 
     var body: some View {
