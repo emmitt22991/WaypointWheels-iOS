@@ -60,7 +60,7 @@ final class SessionViewModel: ObservableObject {
     func signIn() {
         guard !isLoading else { return }
 
-        Task { [weak self] in
+        Task { @MainActor [weak self] in
             await self?.signInTask()
         }
     }
@@ -104,7 +104,7 @@ final class SessionViewModel: ObservableObject {
     }
 
     func authenticateWithBiometrics() {
-        Task { [weak self] in
+        Task { @MainActor [weak self] in
             await self?.performBiometricAuthentication(isAutomatic: false)
         }
     }
@@ -115,7 +115,7 @@ final class SessionViewModel: ObservableObject {
             canUseBiometricLogin = storedToken != nil
             updateBiometricAvailability()
             if storedToken != nil {
-                Task { [weak self] in
+                Task { @MainActor [weak self] in
                     await self?.performBiometricAuthentication(isAutomatic: true)
                 }
             }
