@@ -47,6 +47,12 @@ struct Park: Identifiable, Hashable, Decodable {
             self.name = name
             self.systemImage = systemImage
         }
+
+        private enum CodingKeys: String, CodingKey {
+            case id
+            case name
+            case systemImage = "system_image"
+        }
     }
 
     let id: UUID

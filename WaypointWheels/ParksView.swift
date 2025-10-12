@@ -26,10 +26,12 @@ struct ParksView: View {
             .searchable(text: $viewModel.searchText,
                         placement: .navigationBarDrawer(displayMode: .always),
                         prompt: Text("Search by name or city"))
+            .refreshable { await viewModel.loadParks(forceReload: true) }
         }
         .navigationDestination(for: Park.self) { park in
             ParkDetailView(viewModel: viewModel.makeDetailViewModel(for: park))
         }
+        .task { await viewModel.loadParks() }
     }
 
     private var backgroundGradient: some View {
@@ -93,7 +95,11 @@ struct ParksView: View {
 
     private var resultsSection: some View {
         Section("Results") {
-            if viewModel.filteredParks.isEmpty {
+            if viewModel.isLoading && !viewModel.hasLoadedParks {
+                loadingView
+            } else if let error = viewModel.loadError, !viewModel.hasLoadedParks {
+                errorView(error)
+            } else if viewModel.filteredParks.isEmpty {
                 ContentUnavailableView(
                     "No parks match right now",
                     systemImage: "leaf",
@@ -102,6 +108,10 @@ struct ParksView: View {
                 .frame(maxWidth: .infinity)
                 .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 12, trailing: 0))
             } else {
+                if let error = viewModel.loadError {
+                    errorBanner(error)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 0, trailing: 0))
+                }
                 ForEach(viewModel.filteredParks) { park in
                     NavigationLink(value: park) {
                         ParkRowView(park: park)
@@ -112,6 +122,49 @@ struct ParksView: View {
             }
         }
         .listRowBackground(Color.clear)
+    }
+}
+
+private extension ParksView {
+    var loadingView: some View {
+        HStack {
+            Spacer()
+            ProgressView("Loading parks…")
+                .progressViewStyle(.circular)
+            Spacer()
+        }
+        .padding(.vertical, 16)
+    }
+
+    func errorView(_ error: Error) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.largeTitle)
+                .foregroundStyle(Color.orange)
+            Text("We couldn’t load parks right now.")
+                .font(.headline)
+            Text(error.localizedDescription)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+            Button(action: { Task { await viewModel.loadParks(forceReload: true) } }) {
+                Label("Try Again", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+    }
+
+    func errorBanner(_ error: Error) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            Image(systemName: "exclamationmark.circle")
+            Text("Couldn’t refresh parks: \(error.localizedDescription)")
+                .font(.footnote)
+                .multilineTextAlignment(.leading)
+        }
+        .foregroundStyle(Color.orange)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -175,5 +228,5 @@ private struct ParkRowView: View {
 }
 
 #Preview {
-    ParksView(viewModel: ParksViewModel())
+    ParksView(viewModel: ParksViewModel(parks: Park.sampleData))
 }
