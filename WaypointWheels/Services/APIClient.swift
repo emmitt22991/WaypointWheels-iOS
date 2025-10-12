@@ -180,8 +180,7 @@ final class APIClient {
 
     private func authorizationToken() -> String? {
         guard let keychainStore = keychainStore else { return nil }
-        guard let storedToken = try? keychainStore.fetchToken(),
-              let token = storedToken,
+        guard let token = ((try? keychainStore.fetchToken()) ?? nil),
               !token.isEmpty else { return nil }
         return token
     }
