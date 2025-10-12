@@ -6,6 +6,22 @@ struct TripLocation: Identifiable, Hashable {
     let name: String
     let description: String
     let coordinate: CLLocationCoordinate2D
+
+    static func == (lhs: TripLocation, rhs: TripLocation) -> Bool {
+        lhs.id == rhs.id &&
+            lhs.name == rhs.name &&
+            lhs.description == rhs.description &&
+            lhs.coordinate.latitude == rhs.coordinate.latitude &&
+            lhs.coordinate.longitude == rhs.coordinate.longitude
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(name)
+        hasher.combine(description)
+        hasher.combine(coordinate.latitude)
+        hasher.combine(coordinate.longitude)
+    }
 }
 
 struct TripLeg: Identifiable, Hashable {
