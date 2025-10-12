@@ -9,11 +9,13 @@ struct ChecklistsView: View {
                 if viewModel.checklists.isEmpty {
                     emptyState
                 } else {
-                    ForEach($viewModel.checklists) { $checklist in
-                        NavigationLink {
-                            ChecklistDetailView(checklist: $checklist, viewModel: viewModel)
-                        } label: {
-                            ChecklistRowView(checklist: checklist.wrappedValue)
+                    ForEach(viewModel.checklists) { checklist in
+                        if let checklistBinding = binding(for: checklist) {
+                            NavigationLink {
+                                ChecklistDetailView(checklist: checklistBinding, viewModel: viewModel)
+                            } label: {
+                                ChecklistRowView(checklist: checklist)
+                            }
                         }
                     }
                     .onDelete(perform: viewModel.removeChecklists)
@@ -59,6 +61,25 @@ struct ChecklistsView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 48)
         .listRowBackground(Color.clear)
+    }
+}
+
+private extension ChecklistsView {
+    func binding(for checklist: Checklist) -> Binding<Checklist>? {
+        guard viewModel.checklists.contains(where: { $0.id == checklist.id }) else { return nil }
+
+        return Binding(
+            get: {
+                guard let index = viewModel.checklists.firstIndex(where: { $0.id == checklist.id }) else {
+                    return checklist
+                }
+                return viewModel.checklists[index]
+            },
+            set: { updatedChecklist in
+                guard let index = viewModel.checklists.firstIndex(where: { $0.id == checklist.id }) else { return }
+                viewModel.checklists[index] = updatedChecklist
+            }
+        )
     }
 }
 
