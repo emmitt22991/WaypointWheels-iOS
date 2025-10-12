@@ -2,11 +2,24 @@ import SwiftUI
 
 struct DashboardView: View {
     let userName: String
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let accentGradient = LinearGradient(colors: [
         Color(red: 0.98, green: 0.88, blue: 0.63),
         Color(red: 1.0, green: 0.95, blue: 0.82)
     ], startPoint: .topLeading, endPoint: .bottomTrailing)
+
+    private var isCompactWidth: Bool {
+        horizontalSizeClass == .compact || horizontalSizeClass == nil
+    }
+
+    private var heroTileColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: isCompactWidth ? 220 : 260), spacing: 16)]
+    }
+
+    private var contentColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: isCompactWidth ? 260 : 300), spacing: 16)]
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -36,37 +49,23 @@ struct DashboardView: View {
 
     private var heroSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Waypoint Wheels")
-                        .font(.largeTitle)
-                        .fontWeight(.heavy)
-                        .tracking(1.5)
-                    Text("Camp In Style")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
+            if #available(iOS 16.0, *) {
+                ViewThatFits {
+                    HStack(alignment: .center, spacing: 16) {
+                        heroHeader
+                        Spacer(minLength: 16)
+                        heroProfile
+                    }
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        heroHeader
+                        heroProfile
+                    }
                 }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 8) {
-                    Text("Let's get this show on the road!")
-                        .font(.footnote)
-                        .foregroundColor(Color(red: 0.36, green: 0.31, blue: 0.55))
-                        .frame(maxWidth: 120)
-                        .multilineTextAlignment(.trailing)
-                    Capsule()
-                        .fill(accentGradient)
-                        .frame(width: 110, height: 36)
-                        .overlay(
-                            HStack(spacing: 8) {
-                                Image(systemName: "person.crop.circle.fill")
-                                    .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
-                                Text(userName)
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(Color(red: 0.28, green: 0.23, blue: 0.52))
-                            }
-                            .padding(.horizontal, 8)
-                        )
+            } else {
+                VStack(alignment: .leading, spacing: 16) {
+                    heroHeader
+                    heroProfile
                 }
             }
 
@@ -76,7 +75,7 @@ struct DashboardView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
-                    HStack(spacing: 16) {
+                    LazyVGrid(columns: heroTileColumns, alignment: .leading, spacing: 16) {
                         dashboardTile(title: "Current Location", value: "New Braunfels, TX", detail: "The crew is hunkered down in New Braunfels, TX waiting out the warm front.", icon: "mappin.and.ellipse")
                         dashboardTile(title: "Next Travel Day", value: "Sunday · Oct 12", detail: "Wheels up soon! You're bound for \nTyson's RV Resort.", icon: "calendar")
                         dashboardTile(title: "Today", value: "63° & Clear Skies", detail: "Expect sunshine with highs near 70°. Winds from the west, 10-15 mph.", icon: "sun.max.fill")
@@ -103,7 +102,7 @@ struct DashboardView: View {
                 .buttonStyle(.plain)
             }
 
-            HStack(alignment: .top, spacing: 16) {
+            LazyVGrid(columns: contentColumns, alignment: .leading, spacing: 16) {
                 DashboardCard(title: "Next Stop", subtitle: "Austin, TX", accent: accentGradient) {
                     VStack(alignment: .leading, spacing: 8) {
                         timelineRow(title: "Depart", detail: "Mon · 8:00 AM", symbol: "arrow.up.right")
@@ -152,7 +151,7 @@ struct DashboardView: View {
                 .buttonStyle(.plain)
             }
 
-            HStack(alignment: .top, spacing: 16) {
+            LazyVGrid(columns: contentColumns, alignment: .leading, spacing: 16) {
                 DashboardCard(title: "Snapshot Reel", subtitle: "Latest Community Photos", accent: accentGradient) {
                     VStack(alignment: .leading, spacing: 12) {
                         photoGrid
@@ -266,14 +265,15 @@ struct DashboardView: View {
             Divider()
                 .background(Color.black.opacity(0.1))
 
-            HStack(spacing: 12) {
+            HStack(spacing: 0) {
+                bottomNavItem(label: "Dashboard", systemImage: "house.fill")
                 bottomNavItem(label: "Trips", systemImage: "map")
                 bottomNavItem(label: "Parks", systemImage: "leaf")
                 bottomNavItem(label: "Community", systemImage: "person.3")
                 bottomNavItem(label: "Checklists", systemImage: "checklist")
                 bottomNavItem(label: "Settings", systemImage: "gearshape")
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 12)
             .padding(.top, 12)
             .padding(.bottom, 28)
             .background(.ultraThinMaterial)
@@ -291,6 +291,67 @@ struct DashboardView: View {
         }
         .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
         .frame(maxWidth: .infinity)
+    }
+
+    private var heroHeader: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Waypoint Wheels")
+                .font(.largeTitle)
+                .fontWeight(.heavy)
+                .tracking(1.5)
+            Text("Camp In Style")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var heroProfile: some View {
+        if isCompactWidth {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Let's get this show on the road!")
+                    .font(.footnote)
+                    .foregroundColor(Color(red: 0.36, green: 0.31, blue: 0.55))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .multilineTextAlignment(.leading)
+                Capsule()
+                    .fill(accentGradient)
+                    .frame(maxWidth: 200, minHeight: 38)
+                    .overlay(
+                        HStack(spacing: 8) {
+                            Image(systemName: "person.crop.circle.fill")
+                                .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
+                            Text(userName)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(Color(red: 0.28, green: 0.23, blue: 0.52))
+                        }
+                        .padding(.horizontal, 8)
+                    )
+            }
+        } else {
+            VStack(alignment: .trailing, spacing: 8) {
+                Text("Let's get this show on the road!")
+                    .font(.footnote)
+                    .foregroundColor(Color(red: 0.36, green: 0.31, blue: 0.55))
+                    .frame(maxWidth: 160)
+                    .multilineTextAlignment(.trailing)
+                Capsule()
+                    .fill(accentGradient)
+                    .frame(width: 130, height: 38)
+                    .overlay(
+                        HStack(spacing: 8) {
+                            Image(systemName: "person.crop.circle.fill")
+                                .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
+                            Text(userName)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(Color(red: 0.28, green: 0.23, blue: 0.52))
+                        }
+                        .padding(.horizontal, 8)
+                    )
+            }
+        }
     }
 
     private func dashboardTile(title: String, value: String, detail: String, icon: String) -> some View {
