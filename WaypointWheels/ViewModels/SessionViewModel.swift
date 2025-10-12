@@ -36,7 +36,7 @@ final class SessionViewModel: ObservableObject {
     private let apiClient: APIClient
     private let keychainStore: any KeychainStoring
     private let userDefaults: UserDefaults
-    private let makeAuthContext: () -> LAContext
+    private let makeAuthContext: @MainActor () -> LAContext
     private var storedToken: String?
     private var biometricType: LABiometryType = .none
 
@@ -48,7 +48,7 @@ final class SessionViewModel: ObservableObject {
     init(apiClient: APIClient = APIClient(),
          keychainStore: any KeychainStoring = KeychainStore(),
          userDefaults: UserDefaults = .standard,
-         makeAuthContext: @escaping () -> LAContext = { LAContext() }) {
+         makeAuthContext: @escaping @MainActor () -> LAContext = { LAContext() }) {
         self.apiClient = apiClient
         self.keychainStore = keychainStore
         self.userDefaults = userDefaults
