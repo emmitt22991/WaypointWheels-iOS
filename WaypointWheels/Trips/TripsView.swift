@@ -4,8 +4,9 @@ struct TripsView: View {
     @StateObject private var viewModel: TripsViewModel
     @State private var showDeleteConfirmation: TripLeg?
 
-    init(viewModel: TripsViewModel = TripsViewModel()) {
-        _viewModel = StateObject(wrappedValue: viewModel)
+    @MainActor
+    init(viewModel: TripsViewModel? = nil) {
+        _viewModel = StateObject(wrappedValue: viewModel ?? TripsViewModel())
     }
 
     var body: some View {
