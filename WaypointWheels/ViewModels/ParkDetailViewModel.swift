@@ -56,7 +56,7 @@ final class ParkDetailViewModel: ObservableObject {
             apply(detail: detail)
             hasLoaded = true
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
         isLoading = false
     }
@@ -76,7 +76,7 @@ final class ParkDetailViewModel: ObservableObject {
             onParkUpdated(updatedPark)
             await reload()
         } catch {
-            alertMessage = error.localizedDescription
+            alertMessage = error.userFacingMessage
         }
         isSubmittingRating = false
     }
@@ -95,7 +95,7 @@ final class ParkDetailViewModel: ObservableObject {
             reviewDraft = ""
             await reload()
         } catch {
-            alertMessage = error.localizedDescription
+            alertMessage = error.userFacingMessage
         }
         isSubmittingReview = false
     }
@@ -113,7 +113,7 @@ final class ParkDetailViewModel: ObservableObject {
             photoCaption = ""
             await reload()
         } catch {
-            alertMessage = error.localizedDescription
+            alertMessage = error.userFacingMessage
         }
         isUploadingPhoto = false
     }

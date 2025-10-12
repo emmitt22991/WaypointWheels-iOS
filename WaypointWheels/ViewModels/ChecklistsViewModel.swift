@@ -40,7 +40,7 @@ final class ChecklistsViewModel: ObservableObject {
             self.checklists = checklists.map(sanitizedChecklist(_:))
             self.householdMembers = members.sorted(by: { $0.name < $1.name })
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
 
         isLoading = false
@@ -61,7 +61,7 @@ final class ChecklistsViewModel: ObservableObject {
             clearValidationErrors(for: created.id)
             return created
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
             removeChecklist(id: placeholder.id)
             return nil
         }
@@ -85,7 +85,7 @@ final class ChecklistsViewModel: ObservableObject {
                     try await service.deleteChecklist(id: entry.checklist.id)
                 } catch {
                     await MainActor.run {
-                        errorMessage = error.localizedDescription
+                        errorMessage = error.userFacingMessage
                         checklists.insert(entry.checklist, at: min(entry.index, checklists.count))
                     }
                 }
@@ -123,7 +123,7 @@ final class ChecklistsViewModel: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = error.localizedDescription
+                    errorMessage = error.userFacingMessage
                     removeChecklist(id: duplicate.id)
                 }
             }
@@ -279,10 +279,10 @@ private extension ChecklistsViewModel {
             case .serverError(let message):
                 applyValidationError(message: message, checklistID: checklistID)
             default:
-                errorMessage = serviceError.localizedDescription
+                errorMessage = serviceError.userFacingMessage
             }
         } else {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
     }
 
