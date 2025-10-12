@@ -311,12 +311,37 @@ struct DashboardView: View {
                 .background(Color.black.opacity(0.1))
 
             HStack(spacing: 0) {
-                bottomNavItem(label: "Dashboard", systemImage: "house.fill")
-                bottomNavItem(label: "Trips", systemImage: "map")
-                bottomNavItem(label: "Parks", systemImage: "leaf")
-                bottomNavItem(label: "Community", systemImage: "person.3")
-                bottomNavItem(label: "Checklists", systemImage: "checklist")
-                bottomNavItem(label: "Settings", systemImage: "gearshape")
+                Button(action: {}) {
+                    bottomNavItem(label: "Dashboard", systemImage: "house.fill")
+                }
+                .buttonStyle(.plain)
+
+                NavigationLink {
+                    TripsView()
+                } label: {
+                    bottomNavItem(label: "Trips", systemImage: "map")
+                }
+                .buttonStyle(.plain)
+
+                Button(action: {}) {
+                    bottomNavItem(label: "Parks", systemImage: "leaf")
+                }
+                .buttonStyle(.plain)
+
+                Button(action: {}) {
+                    bottomNavItem(label: "Community", systemImage: "person.3")
+                }
+                .buttonStyle(.plain)
+
+                Button(action: {}) {
+                    bottomNavItem(label: "Checklists", systemImage: "checklist")
+                }
+                .buttonStyle(.plain)
+
+                Button(action: {}) {
+                    bottomNavItem(label: "Settings", systemImage: "gearshape")
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 12)
             .padding(.top, 12)
