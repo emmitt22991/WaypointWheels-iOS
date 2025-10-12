@@ -6,6 +6,25 @@ struct ChecklistsView: View {
     var body: some View {
         NavigationStack {
             List {
+                if let message = viewModel.errorMessage {
+                    Section {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier("checklists-error-message")
+                    }
+                }
+
+                if viewModel.isLoading {
+                    Section {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                            Spacer()
+                        }
+                    }
+                }
+
                 if viewModel.checklists.isEmpty {
                     emptyState
                 } else {
@@ -23,6 +42,9 @@ struct ChecklistsView: View {
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Checklists")
+            .refreshable {
+                await viewModel.refresh()
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if !viewModel.checklists.isEmpty {
@@ -41,8 +63,8 @@ struct ChecklistsView: View {
     }
 
     private func addChecklist() {
-        withAnimation {
-            _ = viewModel.addChecklist()
+        Task {
+            await viewModel.createChecklist()
         }
     }
 
@@ -76,8 +98,7 @@ private extension ChecklistsView {
                 return viewModel.checklists[index]
             },
             set: { updatedChecklist in
-                guard let index = viewModel.checklists.firstIndex(where: { $0.id == checklist.id }) else { return }
-                viewModel.checklists[index] = updatedChecklist
+                viewModel.applyEditedChecklist(updatedChecklist)
             }
         )
     }
@@ -94,6 +115,13 @@ private struct ChecklistRowView: View {
                 Text(checklist.description)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+            }
+
+            if !checklist.assignedMembers.isEmpty {
+                Text(checklist.assignedMembers.map(\.name).joined(separator: ", "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("checklist-row-assignees")
             }
 
             HStack(alignment: .center, spacing: 12) {
@@ -117,10 +145,56 @@ private struct ChecklistDetailView: View {
 
     var body: some View {
         Form {
+            if let message = viewModel.validationMessage(for: checklist.id, field: .general) {
+                Section {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
+            }
+
             Section("Details") {
                 TextField("Title", text: $checklist.title)
                     .textInputAutocapitalization(.words)
+                if let message = viewModel.validationMessage(for: checklist.id, field: .title) {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .accessibilityIdentifier("checklist-title-error")
+                }
                 TextField("Description", text: $checklist.description, axis: .vertical)
+            }
+
+            Section("Assign to") {
+                if viewModel.householdMembers.isEmpty {
+                    Text("Invite household members to assign tasks.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(viewModel.householdMembers) { member in
+                        Button {
+                            viewModel.toggleAssignment(member: member, checklistID: checklist.id)
+                        } label: {
+                            HStack {
+                                Text(member.name)
+                                Spacer()
+                                if checklist.assignedMembers.contains(member) {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(Color.accentColor)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                if let message = viewModel.validationMessage(for: checklist.id, field: .assignments) {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .accessibilityIdentifier("checklist-assignment-error")
+                }
             }
 
             Section {
@@ -156,6 +230,9 @@ private struct ChecklistDetailView: View {
                     }
                     .onDelete { offsets in
                         viewModel.removeItems(from: checklist.id, at: offsets)
+                    }
+                    .onMove { indices, newOffset in
+                        viewModel.moveItems(in: checklist.id, from: indices, to: newOffset)
                     }
                 }
             } header: {
@@ -210,5 +287,7 @@ private struct ChecklistDetailView: View {
 }
 
 #Preview {
-    ChecklistsView(viewModel: ChecklistsViewModel())
+    ChecklistsView(viewModel: ChecklistsViewModel(checklists: Checklist.sampleData,
+                                                  householdMembers: HouseholdMember.sampleMembers,
+                                                  autoLoad: false))
 }
