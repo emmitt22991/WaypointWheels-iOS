@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import LocalAuthentication
 import Testing
 @testable import WaypointWheels
 
@@ -61,6 +62,55 @@ final class MockKeychainStore: KeychainStoring {
 
     func save(token: String) throws {
         savedToken = token
+    }
+
+    func fetchToken() throws -> String? {
+        savedToken
+    }
+
+    func removeToken() throws {
+        savedToken = nil
+    }
+}
+
+final class StubAuthenticationContext: LAContext {
+    private let canEvaluate: Bool
+    private let stubBiometryType: LABiometryType
+    private let evaluationResult: Result<Bool, Error>
+
+    init(canEvaluate: Bool = true,
+         biometryType: LABiometryType = .faceID,
+         evaluationResult: Result<Bool, Error> = .success(true)) {
+        self.canEvaluate = canEvaluate
+        self.stubBiometryType = biometryType
+        self.evaluationResult = evaluationResult
+        super.init()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func canEvaluatePolicy(_ policy: LAPolicy, error: NSErrorPointer) -> Bool {
+        if !canEvaluate,
+           case let .failure(error) = evaluationResult {
+            error?.pointee = error as NSError
+        }
+        return canEvaluate
+    }
+
+    override var biometryType: LABiometryType {
+        stubBiometryType
+    }
+
+    override func evaluatePolicy(_ policy: LAPolicy, localizedReason: String, reply: @escaping (Bool, Error?) -> Void) {
+        switch evaluationResult {
+        case let .success(success):
+            reply(success, nil)
+        case let .failure(error):
+            reply(false, error)
+        }
     }
 }
 
@@ -214,7 +264,10 @@ struct SessionViewModelTests {
         let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
         let apiClient = APIClient(session: session, bundle: bundle)
         let keychainStore = MockKeychainStore()
-        let viewModel = SessionViewModel(apiClient: apiClient, keychainStore: keychainStore)
+        let viewModel = SessionViewModel(apiClient: apiClient,
+                                         keychainStore: keychainStore,
+                                         userDefaults: .standard,
+                                         makeAuthContext: { StubAuthenticationContext(canEvaluate: false) })
 
         let expectedToken = "abc123"
 
@@ -252,7 +305,10 @@ struct SessionViewModelTests {
         let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
         let apiClient = APIClient(session: session, bundle: bundle)
         let keychainStore = MockKeychainStore()
-        let viewModel = SessionViewModel(apiClient: apiClient, keychainStore: keychainStore)
+        let viewModel = SessionViewModel(apiClient: apiClient,
+                                         keychainStore: keychainStore,
+                                         userDefaults: .standard,
+                                         makeAuthContext: { StubAuthenticationContext(canEvaluate: false) })
 
         MockURLProtocol.requestHandler = { request in
             #expect(false, "API should not be called when inputs are invalid")
@@ -272,5 +328,70 @@ struct SessionViewModelTests {
 
         await viewModel.signInTask()
         #expect(viewModel.errorMessage == "Please enter your password.")
+    }
+    
+    @Test("SessionViewModel persists credentials for biometric login")
+    func signInPersistsCredentialsForBiometrics() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let keychainStore = MockKeychainStore()
+        let defaults = UserDefaults(suiteName: "SessionViewModelTests_persistence")!
+        defaults.removePersistentDomain(forName: "SessionViewModelTests_persistence")
+        defer { defaults.removePersistentDomain(forName: "SessionViewModelTests_persistence") }
+
+        let viewModel = SessionViewModel(apiClient: apiClient,
+                                         keychainStore: keychainStore,
+                                         userDefaults: defaults,
+                                         makeAuthContext: { StubAuthenticationContext(biometryType: .faceID) })
+
+        let expectedToken = "storedToken"
+        let expectedName = "Biometric User"
+        let expectedEmail = "biometric@example.com"
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == "https://example.com/api/login/")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = """{"token":"\(expectedToken)","user":{"name":"\(expectedName)"}}""".data(using: .utf8)!
+            return (response, data)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        viewModel.email = expectedEmail
+        viewModel.password = "secret"
+
+        await viewModel.signInTask()
+
+        #expect(viewModel.canUseBiometricLogin)
+        #expect(viewModel.biometricButtonTitle == "Sign In with Face ID")
+        #expect(defaults.string(forKey: "com.stepstonetexas.waypointwheels.name") == expectedName)
+        #expect(defaults.string(forKey: "com.stepstonetexas.waypointwheels.email") == expectedEmail)
+    }
+
+    @Test("SessionViewModel restores persisted sessions using biometrics when available")
+    func restoresSessionWithBiometrics() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let keychainStore = MockKeychainStore()
+        try keychainStore.save(token: "persisted-token")
+
+        let defaults = UserDefaults(suiteName: "SessionViewModelTests_restore")!
+        defaults.removePersistentDomain(forName: "SessionViewModelTests_restore")
+        defaults.set("Restored User", forKey: "com.stepstonetexas.waypointwheels.name")
+        defaults.set("restored@example.com", forKey: "com.stepstonetexas.waypointwheels.email")
+        defer { defaults.removePersistentDomain(forName: "SessionViewModelTests_restore") }
+
+        let viewModel = SessionViewModel(apiClient: apiClient,
+                                         keychainStore: keychainStore,
+                                         userDefaults: defaults,
+                                         makeAuthContext: { StubAuthenticationContext(biometryType: .touchID) })
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        #expect(viewModel.isAuthenticated)
+        #expect(viewModel.userName == "Restored User")
+        #expect(viewModel.email == "restored@example.com")
+        #expect(viewModel.biometricButtonTitle == "Sign In with Touch ID")
     }
 }

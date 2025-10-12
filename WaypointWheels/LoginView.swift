@@ -35,6 +35,15 @@ struct LoginView: View {
             .buttonStyle(.borderedProminent)
             .disabled(viewModel.isLoading)
 
+            if viewModel.canUseBiometricLogin {
+                Button(action: viewModel.authenticateWithBiometrics) {
+                    Label(viewModel.biometricButtonTitle, systemImage: viewModel.biometricButtonIcon)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .disabled(viewModel.isLoading)
+            }
+
             if let errorMessage = viewModel.errorMessage, !errorMessage.isEmpty {
                 Text(errorMessage)
                     .foregroundColor(.red)
