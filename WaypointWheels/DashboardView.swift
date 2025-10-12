@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DashboardView: View {
     let userName: String
+    @State private var isShowingParks = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var checklistsViewModel = ChecklistsViewModel()
     @State private var showingChecklists = false
@@ -248,7 +249,9 @@ struct DashboardView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                 Spacer()
-                Button(action: {}) {
+                Button(action: {
+                    isShowingParks = true
+                }) {
                     Label("Browse All Parks", systemImage: "leaf")
                         .font(.subheadline)
                         .padding(.horizontal, 16)
@@ -267,6 +270,9 @@ struct DashboardView: View {
                 }
                 .padding(.vertical, 4)
             }
+        }
+        .sheet(isPresented: $isShowingParks) {
+            ParksView()
         }
     }
 
