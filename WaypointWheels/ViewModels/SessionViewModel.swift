@@ -7,8 +7,7 @@ final class SessionViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
     @Published var userName: String?
-    @Published var requestJSON: String?
-    @Published var responseJSON: String?
+    @Published var isAuthenticated: Bool = false
 
     private let apiClient: APIClient
     private let keychainStore: any KeychainStoring
@@ -31,8 +30,7 @@ final class SessionViewModel: ObservableObject {
     func signInTask() async {
         isLoading = true
         errorMessage = nil
-        requestJSON = nil
-        responseJSON = nil
+        isAuthenticated = false
 
         let sanitizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let currentPassword = password
@@ -49,35 +47,16 @@ final class SessionViewModel: ObservableObject {
             return
         }
 
-        requestJSON = makeJSON(email: sanitizedEmail, password: currentPassword)
-
         do {
             let response = try await apiClient.login(email: sanitizedEmail, password: currentPassword)
             try keychainStore.save(token: response.value.token)
             userName = response.value.user.name
             email = sanitizedEmail
-            responseJSON = response.rawString
+            isAuthenticated = true
         } catch {
-            if let apiError = error as? APIClient.APIError,
-               case let APIClient.APIError.serverError(_, body) = apiError {
-                responseJSON = body
-            }
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
-    }
-
-    private func makeJSON(email: String, password: String) -> String? {
-        let payload: [String: String] = [
-            "email": email,
-            "password": password
-        ]
-
-        guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]) else {
-            return nil
-        }
-
-        return String(data: data, encoding: .utf8)
     }
 }
