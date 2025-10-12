@@ -17,7 +17,7 @@ struct TripPlanView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Map(position: $cameraPosition, interactionModes: .all, showsUserLocation: false) {
+            Map(position: $cameraPosition, interactionModes: .all) {
                 ForEach(stops) { location in
                     Annotation(label(for: location), coordinate: location.coordinate) {
                         VStack(spacing: 4) {
