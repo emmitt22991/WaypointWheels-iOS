@@ -46,6 +46,30 @@ final class APIClient {
         return try await perform(request: request)
     }
 
+    func request<T: Decodable>(path: String, queryItems: [URLQueryItem]) async throws -> T {
+        let baseURL = try url(for: path)
+        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            throw APIError.invalidBaseURL(baseURL.absoluteString)
+        }
+
+        let filteredItems = queryItems.filter { item in
+            guard let value = item.value else { return false }
+            return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        if !filteredItems.isEmpty {
+            components.queryItems = filteredItems
+        }
+
+        guard let url = components.url else {
+            throw APIError.invalidBaseURL(baseURL.absoluteString)
+        }
+
+        var request = URLRequest(url: url)
+        applyAuthorization(to: &request)
+        return try await perform(request: request)
+    }
+
     func login(email: String, password: String) async throws -> APIResponse<LoginResponse> {
         let base = try requireBaseURL()
         let url = base

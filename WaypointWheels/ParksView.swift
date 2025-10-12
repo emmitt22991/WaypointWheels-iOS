@@ -61,7 +61,7 @@ struct ParksView: View {
     private var membershipPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
-                ForEach(ParksViewModel.MembershipFilter.allCases) { filter in
+                ForEach(viewModel.membershipFilters) { filter in
                     Button(action: {
                         withAnimation(.easeInOut) {
                             viewModel.selectedFilter = filter

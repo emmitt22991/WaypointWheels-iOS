@@ -1,7 +1,9 @@
+import Combine
 import Foundation
 
+@MainActor
 final class ParksViewModel: ObservableObject {
-    enum MembershipFilter: Identifiable, CaseIterable {
+    enum MembershipFilter: Identifiable, Equatable {
         case all
         case membership(Park.Membership)
 
@@ -9,7 +11,7 @@ final class ParksViewModel: ObservableObject {
             switch self {
             case .all:
                 return "all"
-            case .membership(let membership):
+            case let .membership(membership):
                 return membership.rawValue
             }
         }
@@ -18,48 +20,111 @@ final class ParksViewModel: ObservableObject {
             switch self {
             case .all:
                 return "All Memberships"
-            case .membership(let membership):
+            case let .membership(membership):
                 return membership.rawValue
             }
         }
 
-        static var allCases: [ParksViewModel.MembershipFilter] {
-            [.all] + Park.Membership.allCases.map { .membership($0) }
-        }
-    }
-
-    @Published var parks: [Park]
-    @Published var selectedFilter: MembershipFilter = .all
-    @Published var showFamilyFavoritesOnly = false
-
-    init(parks: [Park] = Park.sampleData) {
-        self.parks = parks
-    }
-
-    var filteredParks: [Park] {
-        parks.filter { park in
-            matchesMembershipFilter(park) && matchesRatingFilter(park)
-        }
-        .sorted { lhs, rhs in
-            if showFamilyFavoritesOnly {
-                return lhs.rating == rhs.rating ? lhs.name < rhs.name : lhs.rating > rhs.rating
-            } else {
-                return lhs.name < rhs.name
+        static func == (lhs: MembershipFilter, rhs: MembershipFilter) -> Bool {
+            switch (lhs, rhs) {
+            case (.all, .all):
+                return true
+            case let (.membership(lhsValue), .membership(rhsValue)):
+                return lhsValue == rhsValue
+            default:
+                return false
             }
         }
     }
 
-    private func matchesMembershipFilter(_ park: Park) -> Bool {
-        switch selectedFilter {
-        case .all:
-            return true
-        case .membership(let membership):
-            return park.memberships.contains(membership)
-        }
+    @Published private(set) var filteredParks: [Park] = []
+    @Published private(set) var availableStates: [String] = []
+    @Published private(set) var availableMemberships: [Park.Membership] = []
+    @Published private(set) var membershipFilters: [MembershipFilter] = [.all]
+
+    @Published var searchQuery: String = ""
+    @Published var selectedState: String?
+    @Published var selectedFilter: MembershipFilter = .all
+    @Published var showFamilyFavoritesOnly = false
+    @Published var isLoading: Bool = false
+    @Published var error: String?
+
+    private let service: ParksService
+    private var cancellables = Set<AnyCancellable>()
+    private var fetchTask: Task<Void, Never>?
+
+    init(service: ParksService = ParksService()) {
+        self.service = service
+        configureBindings()
+        fetchParks()
     }
 
-    private func matchesRatingFilter(_ park: Park) -> Bool {
-        guard showFamilyFavoritesOnly else { return true }
-        return park.rating >= 4.0
+    private func configureBindings() {
+        Publishers.CombineLatest4(
+            $searchQuery.removeDuplicates(),
+            $selectedState.removeDuplicates(),
+            $selectedFilter.removeDuplicates(),
+            $showFamilyFavoritesOnly.removeDuplicates()
+        )
+        .dropFirst()
+        .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+        .sink { [weak self] _ in
+            self?.fetchParks()
+        }
+        .store(in: &cancellables)
+    }
+
+    private func fetchParks() {
+        fetchTask?.cancel()
+
+        let trimmedSearch = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedSearch = trimmedSearch.isEmpty ? nil : trimmedSearch
+        let normalizedState = selectedState?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let membershipParameter: Park.Membership?
+        switch selectedFilter {
+        case .all:
+            membershipParameter = nil
+        case let .membership(value):
+            membershipParameter = value
+        }
+        let minimumRating = showFamilyFavoritesOnly ? 4.0 : nil
+
+        fetchTask = Task { [weak self] in
+            guard let self else { return }
+
+            self.isLoading = true
+            self.error = nil
+
+            do {
+                let response = try await service.fetchParks(
+                    search: normalizedSearch,
+                    state: normalizedState?.isEmpty == true ? nil : normalizedState,
+                    membership: membershipParameter,
+                    minRating: minimumRating
+                )
+
+                self.filteredParks = response.parks
+                self.availableStates = response.availableStates
+                self.availableMemberships = response.availableMemberships
+                self.membershipFilters = [.all] + response.availableMemberships.map { MembershipFilter.membership($0) }
+
+                if let selectedState = self.selectedState,
+                   !response.availableStates.contains(selectedState) {
+                    self.selectedState = nil
+                }
+
+                if case let .membership(current) = self.selectedFilter,
+                   !response.availableMemberships.contains(current) {
+                    self.selectedFilter = .all
+                }
+
+                self.isLoading = false
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.filteredParks = []
+                self.isLoading = false
+                self.error = error.localizedDescription
+            }
+        }
     }
 }
