@@ -5,40 +5,42 @@ struct TripPlanView: View {
     let legs: [TripLeg]
 
     private let stops: [TripLocation]
-    @State private var region: MKCoordinateRegion
+    @State private var cameraPosition: MapCameraPosition
     @State private var selectedLocation: TripLocation?
 
     init(legs: [TripLeg]) {
         self.legs = legs
         self.stops = TripPlanView.uniqueStops(from: legs)
         let defaultRegion = TripPlanView.makeRegion(for: stops)
-        _region = State(initialValue: defaultRegion)
+        _cameraPosition = State(initialValue: .region(defaultRegion))
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            Map(coordinateRegion: $region, interactionModes: [.all], showsUserLocation: false, annotationItems: stops) { location in
-                MapAnnotation(coordinate: location.coordinate) {
-                    VStack(spacing: 4) {
-                        Text(label(for: location))
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 4)
-                            .background(locationBadgeColor(for: location))
-                            .foregroundStyle(Color.white)
-                            .clipShape(Capsule())
-                        Image(systemName: iconName(for: location))
-                            .font(.title2)
-                            .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
-                            .padding(6)
-                            .background(Color.white, in: Circle())
-                            .shadow(radius: 4)
-                            .onTapGesture {
-                                withAnimation(.easeInOut) {
-                                    selectedLocation = location
+            Map(position: $cameraPosition, interactionModes: [.all], showsUserLocation: false) {
+                ForEach(stops) { location in
+                    Annotation(label(for: location), coordinate: location.coordinate) {
+                        VStack(spacing: 4) {
+                            Text(label(for: location))
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 4)
+                                .background(locationBadgeColor(for: location))
+                                .foregroundStyle(Color.white)
+                                .clipShape(Capsule())
+                            Image(systemName: iconName(for: location))
+                                .font(.title2)
+                                .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
+                                .padding(6)
+                                .background(Color.white, in: Circle())
+                                .shadow(radius: 4)
+                                .onTapGesture {
+                                    withAnimation(.easeInOut) {
+                                        selectedLocation = location
+                                    }
                                 }
-                            }
+                        }
                     }
                 }
             }
