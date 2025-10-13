@@ -338,6 +338,40 @@ struct TripsServiceTests {
         return URLSession(configuration: configuration)
     }
 
+    private var sampleLegJSON: String {
+        """
+            {
+                "id": "leg-1",
+                "day_label": "Leg 1",
+                "date_range_description": "Mon · Apr 14",
+                "start": {
+                    "id": "loc-austin",
+                    "name": "Austin, TX",
+                    "description": "Pecan Grove RV Park",
+                    "coordinate": {
+                        "latitude": 30.2747,
+                        "longitude": -97.7404
+                    }
+                },
+                "end": {
+                    "id": "loc-waco",
+                    "name": "Waco, TX",
+                    "description": "Riverview Resort",
+                    "coordinate": {
+                        "latitude": 31.5493,
+                        "longitude": -97.1467
+                    }
+                },
+                "distance_in_miles": 102,
+                "estimated_drive_time": "1 hr 45 min",
+                "highlights": [
+                    "Arrive by lunch for a riverside picnic"
+                ],
+                "notes": "Campground has limited shade — plan for awning setup."
+            }
+        """
+    }
+
     @Test("TripsService requests the current itinerary and decodes legs")
     func fetchCurrentItineraryRequestsTripsEndpoint() async throws {
         let session = makeSession()
@@ -348,36 +382,76 @@ struct TripsServiceTests {
         let payload = """
         {
             "legs": [
-                {
-                    "id": "leg-1",
-                    "day_label": "Leg 1",
-                    "date_range_description": "Mon · Apr 14",
-                    "start": {
-                        "id": "loc-austin",
-                        "name": "Austin, TX",
-                        "description": "Pecan Grove RV Park",
-                        "coordinate": {
-                            "latitude": 30.2747,
-                            "longitude": -97.7404
-                        }
-                    },
-                    "end": {
-                        "id": "loc-waco",
-                        "name": "Waco, TX",
-                        "description": "Riverview Resort",
-                        "coordinate": {
-                            "latitude": 31.5493,
-                            "longitude": -97.1467
-                        }
-                    },
-                    "distance_in_miles": 102,
-                    "estimated_drive_time": "1 hr 45 min",
-                    "highlights": [
-                        "Arrive by lunch for a riverside picnic"
-                    ],
-                    "notes": "Campground has limited shade — plan for awning setup."
-                }
+                \(sampleLegJSON)
             ]
+        }
+        """.data(using: .utf8)!
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == "https://example.com/api/trips/current/")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, payload)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let itinerary = try await service.fetchCurrentItinerary()
+
+        #expect(itinerary.count == 1)
+        let leg = try #require(itinerary.first)
+        #expect(leg.id == "leg-1")
+        #expect(leg.start.id == "loc-austin")
+        #expect(abs(leg.start.coordinate.latitude - 30.2747) < 0.0001)
+        #expect(abs(leg.end.coordinate.longitude + 97.1467) < 0.0001)
+        #expect(leg.highlights == ["Arrive by lunch for a riverside picnic"])
+    }
+
+    @Test("TripsService decodes itineraries when the response is an array of legs")
+    func fetchCurrentItineraryDecodesRootArray() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = TripsService(apiClient: apiClient)
+
+        let payload = """
+        [
+            \(sampleLegJSON)
+        ]
+        """.data(using: .utf8)!
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == "https://example.com/api/trips/current/")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, payload)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let itinerary = try await service.fetchCurrentItinerary()
+
+        #expect(itinerary.count == 1)
+        let leg = try #require(itinerary.first)
+        #expect(leg.id == "leg-1")
+        #expect(leg.start.id == "loc-austin")
+        #expect(abs(leg.start.coordinate.latitude - 30.2747) < 0.0001)
+        #expect(abs(leg.end.coordinate.longitude + 97.1467) < 0.0001)
+        #expect(leg.highlights == ["Arrive by lunch for a riverside picnic"])
+    }
+
+    @Test("TripsService decodes itineraries when wrapped in a trip object")
+    func fetchCurrentItineraryDecodesNestedTrip() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = TripsService(apiClient: apiClient)
+
+        let payload = """
+        {
+            "trip": {
+                "itinerary": {
+                    "legs": [
+                        \(sampleLegJSON)
+                    ]
+                }
+            }
         }
         """.data(using: .utf8)!
 

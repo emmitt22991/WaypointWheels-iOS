@@ -23,6 +23,57 @@ final class TripsService {
 
     struct ItineraryResponse: Decodable {
         let legs: [TripLeg]
+
+        init(from decoder: Decoder) throws {
+            // Some responses return an array of legs at the root level.
+            if let singleValueContainer = try? decoder.singleValueContainer(),
+               let legs = try? singleValueContainer.decode([TripLeg].self) {
+                self.legs = legs
+                return
+            }
+
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+
+            if let legs = try? container.decode([TripLeg].self, forKey: .legs) {
+                self.legs = legs
+                return
+            }
+
+            if let legs = try ItineraryResponse.decodeNestedLegs(from: container, forKey: .trip) {
+                self.legs = legs
+                return
+            }
+
+            if let legs = try ItineraryResponse.decodeNestedLegs(from: container, forKey: .itinerary) {
+                self.legs = legs
+                return
+            }
+
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
+                                                    debugDescription: "Unable to decode itinerary legs from response."))
+        }
+
+        private static func decodeNestedLegs(from container: KeyedDecodingContainer<CodingKeys>,
+                                             forKey key: CodingKeys) throws -> [TripLeg]? {
+            guard container.contains(key) else { return nil }
+            let nestedContainer = try container.nestedContainer(keyedBy: CodingKeys.self, forKey: key)
+
+            if let legs = try? nestedContainer.decode([TripLeg].self, forKey: .legs) {
+                return legs
+            }
+
+            if let deeperLegs = try decodeNestedLegs(from: nestedContainer, forKey: .itinerary) {
+                return deeperLegs
+            }
+
+            return nil
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case legs
+            case trip
+            case itinerary
+        }
     }
 
     private let apiClient: APIClient
