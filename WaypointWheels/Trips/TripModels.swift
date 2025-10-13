@@ -61,7 +61,7 @@ struct TripLeg: Identifiable, Hashable, Decodable {
     let dateRangeDescription: String
     let start: TripLocation
     let end: TripLocation
-    let distanceInMiles: Int
+    let distanceInMiles: Double
     let estimatedDriveTime: String
     let highlights: [String]
     let notes: String?
@@ -71,7 +71,7 @@ struct TripLeg: Identifiable, Hashable, Decodable {
          dateRangeDescription: String,
          start: TripLocation,
          end: TripLocation,
-         distanceInMiles: Int,
+         distanceInMiles: Double,
          estimatedDriveTime: String,
          highlights: [String],
          notes: String?) {
@@ -93,7 +93,7 @@ struct TripLeg: Identifiable, Hashable, Decodable {
         dateRangeDescription = try container.decode(String.self, forKey: .dateRangeDescription)
         start = try container.decode(TripLocation.self, forKey: .start)
         end = try container.decode(TripLocation.self, forKey: .end)
-        distanceInMiles = try container.decode(Int.self, forKey: .distanceInMiles)
+        distanceInMiles = try container.decode(Double.self, forKey: .distanceInMiles)
         estimatedDriveTime = try container.decode(String.self, forKey: .estimatedDriveTime)
         highlights = try container.decode([String].self, forKey: .highlights)
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
@@ -157,7 +157,7 @@ extension TripLeg {
                 dateRangeDescription: "Mon · Apr 14",
                 start: newBraunfels,
                 end: austin,
-                distanceInMiles: 49,
+                distanceInMiles: 49.0,
                 estimatedDriveTime: "1 hr 5 min",
                 highlights: [
                     "Depart by 8:00 AM to beat the traffic",
@@ -172,7 +172,7 @@ extension TripLeg {
                 dateRangeDescription: "Wed · Apr 16",
                 start: austin,
                 end: waco,
-                distanceInMiles: 102,
+                distanceInMiles: 102.0,
                 estimatedDriveTime: "1 hr 45 min",
                 highlights: [
                     "Arrive by lunch for a riverside picnic",
@@ -187,7 +187,7 @@ extension TripLeg {
                 dateRangeDescription: "Sat · Apr 19",
                 start: waco,
                 end: dallas,
-                distanceInMiles: 96,
+                distanceInMiles: 96.0,
                 estimatedDriveTime: "1 hr 35 min",
                 highlights: [
                     "Grab kolaches at Czech Stop on the way",
@@ -202,7 +202,7 @@ extension TripLeg {
                 dateRangeDescription: "Tue · Apr 22",
                 start: dallas,
                 end: oklahomaCity,
-                distanceInMiles: 205,
+                distanceInMiles: 205.0,
                 estimatedDriveTime: "3 hr 15 min",
                 highlights: [
                     "Stretch break at Turner Falls Park",
