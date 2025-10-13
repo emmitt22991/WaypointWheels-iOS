@@ -197,7 +197,10 @@ final class SessionViewModel: ObservableObject {
         do {
             let success = try await context.evaluatePolicy(policy, localizedReason: "Authenticate to access Waypoint Wheels.")
             if success {
-                completeBiometricLogin()
+                let validationSucceeded = await resumeStoredSession()
+                if validationSucceeded {
+                    completeBiometricLogin()
+                }
             } else if !isAutomatic {
                 errorMessage = "Authentication failed."
             }
@@ -209,6 +212,32 @@ final class SessionViewModel: ObservableObject {
 
             errorMessage = error.userFacingMessage
         }
+    }
+
+    private func resumeStoredSession() async -> Bool {
+        guard storedToken != nil else { return false }
+
+        do {
+            _ = try await apiClient.request(path: "trips/current/", method: "GET") as APIClient.APIResponse<Data>
+            return true
+        } catch let apiError as APIClient.APIError {
+            invalidateStoredSession(withMessage: "Session expired")
+            return false
+        } catch {
+            errorMessage = error.userFacingMessage
+            return false
+        }
+    }
+
+    private func invalidateStoredSession(withMessage message: String?) {
+        storedToken = nil
+        canUseBiometricLogin = false
+        biometricType = .none
+        isAuthenticated = false
+        if let message {
+            errorMessage = message
+        }
+        try? keychainStore.removeToken()
     }
 
     private func completeBiometricLogin() {
@@ -238,7 +267,15 @@ final class SessionViewModel: ObservableObject {
     private func observeSessionExpiration() {
         sessionExpiredObserver = NotificationCenter.default.addObserver(forName: .sessionExpired, object: nil, queue: nil) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.signOut()
+                guard let self else { return }
+
+                if self.isAuthenticated {
+                    self.signOut()
+                } else {
+                    self.storedToken = nil
+                    self.canUseBiometricLogin = false
+                    self.biometricType = .none
+                }
             }
         }
     }
