@@ -255,7 +255,7 @@ private struct TimelineRow: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("\(leg.start.name) → \(leg.end.name)")
                         .font(.headline)
-                    Text("\(leg.distanceInMiles) miles · \(leg.estimatedDriveTime)")
+                    Text("\(String(format: "%.1f", leg.distanceInMiles)) miles · \(leg.estimatedDriveTime)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }

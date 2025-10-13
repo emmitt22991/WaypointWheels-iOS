@@ -89,7 +89,7 @@ struct TripPlanView: View {
                         Text(leg.end.name)
                             .font(.headline)
                         Spacer()
-                        Text("\(leg.distanceInMiles) mi")
+                        Text(String(format: "%.1f mi", leg.distanceInMiles))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
