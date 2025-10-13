@@ -422,6 +422,36 @@ struct TripsServiceTests {
             #expect(false, "Unexpected error: \(error)")
         }
     }
+
+    @Test("TripsService surfaces invalid responses as TripsError.invalidResponse")
+    func fetchCurrentItineraryHandlesMissingLegs() async {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = TripsService(apiClient: apiClient)
+
+        let payload = """
+        {
+            "unexpected": []
+        }
+        """.data(using: .utf8)!
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, payload)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        do {
+            _ = try await service.fetchCurrentItinerary()
+            #expect(false, "Expected fetchCurrentItinerary to throw")
+        } catch let error as TripsService.TripsError {
+            #expect(error == .invalidResponse)
+            #expect(error.errorDescription == "Unexpected response from the trips endpoint.")
+        } catch {
+            #expect(false, "Unexpected error: \(error)")
+        }
+    }
 }
 
 @MainActor
@@ -509,6 +539,33 @@ struct TripsViewModelTests {
         #expect(!viewModel.isLoading)
         #expect(viewModel.itinerary.isEmpty)
         #expect(viewModel.errorMessage == "Network down")
+    }
+
+    @Test("TripsViewModel surfaces friendly messaging for invalid responses")
+    func loadItineraryPublishesFriendlyInvalidResponseMessage() async {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = TripsService(apiClient: apiClient)
+        let viewModel = TripsViewModel(service: service)
+
+        let payload = """
+        {
+            "unexpected": []
+        }
+        """.data(using: .utf8)!
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, payload)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        await viewModel.loadItinerary(forceReload: true)
+
+        #expect(!viewModel.isLoading)
+        #expect(viewModel.itinerary.isEmpty)
+        #expect(viewModel.errorMessage == TripsService.TripsError.invalidResponse.errorDescription)
     }
 }
 
