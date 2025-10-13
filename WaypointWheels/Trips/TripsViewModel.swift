@@ -5,6 +5,7 @@ final class TripsViewModel: ObservableObject {
     @Published private(set) var itinerary: [TripLeg]
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var debugPayload: String?
 
     private let service: TripsService
     private var hasLoaded: Bool
@@ -12,6 +13,7 @@ final class TripsViewModel: ObservableObject {
     init(service: TripsService = TripsService(), initialItinerary: [TripLeg] = []) {
         self.service = service
         self.itinerary = initialItinerary
+        self.debugPayload = nil
         self.hasLoaded = !initialItinerary.isEmpty
     }
 
@@ -21,10 +23,16 @@ final class TripsViewModel: ObservableObject {
 
         isLoading = true
         errorMessage = nil
+        debugPayload = nil
 
         do {
-            itinerary = try await service.fetchCurrentItinerary()
+            let result = try await service.fetchCurrentItineraryResult()
+            itinerary = result.legs
+            debugPayload = result.rawResponse
             hasLoaded = true
+        } catch let serviceError as TripsService.TripsError {
+            debugPayload = serviceError.rawBody
+            errorMessage = serviceError.userFacingMessage
         } catch {
             errorMessage = error.userFacingMessage
         }
