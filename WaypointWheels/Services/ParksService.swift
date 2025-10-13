@@ -29,7 +29,7 @@ final class ParksService {
 
     func fetchParks() async throws -> [Park] {
         do {
-            return try await apiClient.request(path: "api/parks")
+            return try await apiClient.request(path: "parks")
         } catch let error as APIClient.APIError {
             throw ParksServiceError(apiError: error)
         }
@@ -37,7 +37,7 @@ final class ParksService {
 
     func fetchParkDetail(parkID: UUID) async throws -> ParkDetail {
         do {
-            return try await apiClient.request(path: "api/parks/\(parkID.uuidString)")
+            return try await apiClient.request(path: "parks/\(parkID.uuidString)")
         } catch let error as APIClient.APIError {
             throw ParksServiceError(apiError: error)
         }
@@ -46,7 +46,7 @@ final class ParksService {
     func submitRating(parkID: UUID, rating: Double) async throws -> Park {
         let request = RatingRequest(rating: rating)
         do {
-            return try await apiClient.request(path: "api/parks/\(parkID.uuidString)/rating",
+            return try await apiClient.request(path: "parks/\(parkID.uuidString)/rating",
                                                method: .put,
                                                body: request)
         } catch let error as APIClient.APIError {
@@ -57,7 +57,7 @@ final class ParksService {
     func submitReview(parkID: UUID, rating: Double, comment: String) async throws -> ParkDetail.Review {
         let request = ReviewRequest(rating: rating, comment: comment)
         do {
-            return try await apiClient.request(path: "api/parks/\(parkID.uuidString)/reviews",
+            return try await apiClient.request(path: "parks/\(parkID.uuidString)/reviews",
                                                method: .post,
                                                body: request)
         } catch let error as APIClient.APIError {
@@ -68,7 +68,7 @@ final class ParksService {
     func uploadPhoto(parkID: UUID, data: Data, filename: String, caption: String?) async throws -> ParkDetail.Photo {
         let request = UploadPhotoRequest(data: data.base64EncodedString(), filename: filename, caption: caption)
         do {
-            return try await apiClient.request(path: "api/parks/\(parkID.uuidString)/photos",
+            return try await apiClient.request(path: "parks/\(parkID.uuidString)/photos",
                                                method: .post,
                                                body: request)
         } catch let error as APIClient.APIError {
