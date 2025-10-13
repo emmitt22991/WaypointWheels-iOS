@@ -53,6 +53,16 @@ final class TripsService {
                 return
             }
 
+            if let legs = try ItineraryResponse.decodeNestedLegs(from: container, forKey: .currentTrip) {
+                self.legs = legs
+                return
+            }
+
+            if let legs = try ItineraryResponse.decodeNestedLegs(from: container, forKey: .data) {
+                self.legs = legs
+                return
+            }
+
             if ItineraryResponse.payloadIsEmpty(decoder: decoder) {
                 self.legs = []
                 return
@@ -71,8 +81,10 @@ final class TripsService {
                 return legs
             }
 
-            if let deeperLegs = try decodeNestedLegs(from: nestedContainer, forKey: .itinerary) {
-                return deeperLegs
+            for nestedKey in CodingKeys.nestedContainers {
+                if let deeperLegs = try decodeNestedLegs(from: nestedContainer, forKey: nestedKey) {
+                    return deeperLegs
+                }
             }
 
             return nil
@@ -87,6 +99,10 @@ final class TripsService {
             case legs
             case trip
             case itinerary
+            case data
+            case currentTrip = "current_trip"
+
+            static let nestedContainers: [CodingKeys] = [.trip, .itinerary, .currentTrip, .data]
         }
 
         private struct AnyCodingKey: CodingKey {
