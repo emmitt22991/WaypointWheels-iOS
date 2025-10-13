@@ -473,6 +473,25 @@ struct TripsServiceTests {
         #expect(leg.highlights == ["Arrive by lunch for a riverside picnic"])
     }
 
+    @Test("TripsService treats empty itinerary responses as no legs")
+    func fetchCurrentItineraryHandlesEmptyPayload() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = TripsService(apiClient: apiClient)
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == "https://example.com/api/trips/current/")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 204, httpVersion: nil, headerFields: nil)!
+            return (response, Data())
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let itinerary = try await service.fetchCurrentItinerary()
+
+        #expect(itinerary.isEmpty)
+    }
+
     @Test("TripsService maps APIClient errors into TripsError")
     func fetchCurrentItineraryMapsErrors() async {
         let session = makeSession()
