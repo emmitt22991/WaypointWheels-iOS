@@ -676,9 +676,9 @@ struct SessionViewModelTests {
     func restoresSessionWithBiometrics() async throws {
         let session = makeSession()
         let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
-        let apiClient = APIClient(session: session, bundle: bundle)
         let keychainStore = MockKeychainStore()
         try keychainStore.save(token: "persisted-token")
+        let apiClient = APIClient(session: session, bundle: bundle, keychainStore: keychainStore)
 
         let defaults = UserDefaults(suiteName: "SessionViewModelTests_restore")!
         defaults.removePersistentDomain(forName: "SessionViewModelTests_restore")
@@ -686,16 +686,65 @@ struct SessionViewModelTests {
         defaults.set("restored@example.com", forKey: "com.stepstonetexas.waypointwheels.email")
         defer { defaults.removePersistentDomain(forName: "SessionViewModelTests_restore") }
 
+        let expectedURL = "https://example.com/api/trips/current/"
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == expectedURL)
+            #expect(request.httpMethod == "GET")
+            #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer persisted-token")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let body = "\"\"".data(using: .utf8)!
+            return (response, body)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
         let viewModel = SessionViewModel(apiClient: apiClient,
                                          keychainStore: keychainStore,
                                          userDefaults: defaults,
                                          makeAuthContext: { StubAuthenticationContext(biometryType: .touchID) })
 
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await Task.sleep(nanoseconds: 150_000_000)
 
         #expect(viewModel.isAuthenticated)
         #expect(viewModel.userName == "Restored User")
         #expect(viewModel.email == "restored@example.com")
         #expect(viewModel.biometricButtonTitle == "Sign In with Touch ID")
+    }
+
+    @Test("SessionViewModel hides biometric login when stored session validation fails")
+    func biometricValidationFailureClearsStoredSession() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let keychainStore = MockKeychainStore()
+        try keychainStore.save(token: "expired-token")
+
+        let defaults = UserDefaults(suiteName: "SessionViewModelTests_expired")!
+        defaults.removePersistentDomain(forName: "SessionViewModelTests_expired")
+        defaults.set("Expired User", forKey: "com.stepstonetexas.waypointwheels.name")
+        defaults.set("expired@example.com", forKey: "com.stepstonetexas.waypointwheels.email")
+        defer { defaults.removePersistentDomain(forName: "SessionViewModelTests_expired") }
+
+        let apiClient = APIClient(session: session, bundle: bundle, keychainStore: keychainStore)
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == "https://example.com/api/trips/current/")
+            #expect(request.httpMethod == "GET")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!
+            let data = "{\"message\":\"Unauthorized\"}".data(using: .utf8)!
+            return (response, data)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let viewModel = SessionViewModel(apiClient: apiClient,
+                                         keychainStore: keychainStore,
+                                         userDefaults: defaults,
+                                         makeAuthContext: { StubAuthenticationContext() })
+
+        try await Task.sleep(nanoseconds: 150_000_000)
+
+        #expect(!viewModel.isAuthenticated)
+        #expect(!viewModel.canUseBiometricLogin)
+        #expect(viewModel.errorMessage == "Session expired")
+        #expect(keychainStore.savedToken == nil)
     }
 }
