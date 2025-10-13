@@ -473,6 +473,45 @@ struct TripsServiceTests {
         #expect(leg.highlights == ["Arrive by lunch for a riverside picnic"])
     }
 
+    @Test("TripsService decodes itineraries wrapped in data/current_trip envelope")
+    func fetchCurrentItineraryDecodesProductionEnvelope() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = TripsService(apiClient: apiClient)
+
+        let payload = """
+        {
+            "data": {
+                "current_trip": {
+                    "itinerary": {
+                        "legs": [
+                            \(sampleLegJSON)
+                        ]
+                    }
+                }
+            }
+        }
+        """.data(using: .utf8)!
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == "https://example.com/api/trips/current/")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, payload)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let itinerary = try await service.fetchCurrentItinerary()
+
+        #expect(itinerary.count == 1)
+        let leg = try #require(itinerary.first)
+        #expect(leg.id == "leg-1")
+        #expect(leg.start.id == "loc-austin")
+        #expect(abs(leg.start.coordinate.latitude - 30.2747) < 0.0001)
+        #expect(abs(leg.end.coordinate.longitude + 97.1467) < 0.0001)
+        #expect(leg.highlights == ["Arrive by lunch for a riverside picnic"])
+    }
+
     @Test("TripsService treats empty itinerary responses as no legs")
     func fetchCurrentItineraryHandlesEmptyPayload() async throws {
         let session = makeSession()
