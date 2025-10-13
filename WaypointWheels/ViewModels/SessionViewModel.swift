@@ -39,7 +39,6 @@ final class SessionViewModel: ObservableObject {
     private let makeAuthContext: @MainActor () -> LAContext
     private var storedToken: String?
     private var biometricType: LABiometryType = .none
-    private var sessionExpiredObserver: NSObjectProtocol?
 
     private enum DefaultsKeys {
         static let email = "com.stepstonetexas.waypointwheels.email"
@@ -55,14 +54,7 @@ final class SessionViewModel: ObservableObject {
         self.userDefaults = userDefaults
         self.makeAuthContext = makeAuthContext
 
-        observeSessionExpiration()
         configureStoredSession()
-    }
-
-    deinit {
-        if let sessionExpiredObserver {
-            NotificationCenter.default.removeObserver(sessionExpiredObserver)
-        }
     }
 
     func signIn() {
@@ -120,17 +112,32 @@ final class SessionViewModel: ObservableObject {
     private func configureStoredSession() {
         do {
             storedToken = try keychainStore.fetchToken()
-            canUseBiometricLogin = storedToken != nil
-            updateBiometricAvailability()
             if storedToken != nil {
-                Task { @MainActor [weak self] in
-                    await self?.performBiometricAuthentication(isAutomatic: true)
-                }
+                updateBiometricAvailability()
+                activateStoredSession()
+            } else {
+                canUseBiometricLogin = false
+                biometricType = .none
             }
         } catch {
             storedToken = nil
             canUseBiometricLogin = false
+            biometricType = .none
         }
+    }
+
+    private func activateStoredSession() {
+        restorePersistedProfile()
+        if userName == nil {
+            if !email.isEmpty {
+                userName = email
+            } else {
+                userName = "Camper"
+            }
+        }
+        password = ""
+        isAuthenticated = true
+        errorMessage = nil
     }
 
     private func persist(userName: String, email: String) {
@@ -197,10 +204,7 @@ final class SessionViewModel: ObservableObject {
         do {
             let success = try await context.evaluatePolicy(policy, localizedReason: "Authenticate to access Waypoint Wheels.")
             if success {
-                let validationSucceeded = await resumeStoredSession()
-                if validationSucceeded {
-                    completeBiometricLogin()
-                }
+                completeBiometricLogin()
             } else if !isAutomatic {
                 errorMessage = "Authentication failed."
             }
@@ -214,37 +218,8 @@ final class SessionViewModel: ObservableObject {
         }
     }
 
-    private func resumeStoredSession() async -> Bool {
-        guard storedToken != nil else { return false }
-
-        do {
-            _ = try await apiClient.request(path: "trips/current/", method: "GET") as APIClient.APIResponse<Data>
-            return true
-        } catch is APIClient.APIError {
-            invalidateStoredSession(withMessage: "Session expired")
-            return false
-        } catch {
-            errorMessage = error.userFacingMessage
-            return false
-        }
-    }
-
-    private func invalidateStoredSession(withMessage message: String?) {
-        storedToken = nil
-        canUseBiometricLogin = false
-        biometricType = .none
-        isAuthenticated = false
-        if let message {
-            errorMessage = message
-        }
-        try? keychainStore.removeToken()
-    }
-
     private func completeBiometricLogin() {
-        restorePersistedProfile()
-        password = ""
-        isAuthenticated = true
-        errorMessage = nil
+        activateStoredSession()
         canUseBiometricLogin = true
     }
 
@@ -262,21 +237,5 @@ final class SessionViewModel: ObservableObject {
         try? keychainStore.removeToken()
         userDefaults.removeObject(forKey: DefaultsKeys.name)
         userDefaults.removeObject(forKey: DefaultsKeys.email)
-    }
-
-    private func observeSessionExpiration() {
-        sessionExpiredObserver = NotificationCenter.default.addObserver(forName: .sessionExpired, object: nil, queue: nil) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-
-                if self.isAuthenticated {
-                    self.signOut()
-                } else {
-                    self.storedToken = nil
-                    self.canUseBiometricLogin = false
-                    self.biometricType = .none
-                }
-            }
-        }
     }
 }

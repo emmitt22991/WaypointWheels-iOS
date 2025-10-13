@@ -217,8 +217,8 @@ final class APIClient {
 
         guard (200..<300).contains(httpResponse.statusCode) else {
             if [401, 403].contains(httpResponse.statusCode) {
-                try? keychainStore?.removeToken()
-                NotificationCenter.default.post(name: .sessionExpired, object: nil)
+                // Allow the app to retain the stored credentials so the user does not get
+                // kicked back to the login screen when the backend returns an auth error.
             }
             let rawBody = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
             if let message = decodeErrorMessage(from: data), !message.isEmpty {
