@@ -147,6 +147,25 @@ struct APIClientTests {
         #expect(response.status == expectedStatus)
     }
 
+    @Test("APIClient builds park endpoints relative to the configured base URL")
+    func requestBuildsParksEndpoint() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let client = APIClient(session: session, bundle: bundle)
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == "https://example.com/api/parks")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            let data = "{\"status\": \"ok\"}".data(using: .utf8)!
+            return (response, data)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let response: SampleResponse = try await client.request(path: "parks")
+
+        #expect(response.status == "ok")
+    }
+
     @Test("APIClient login builds a POST request to /login")
     func loginBuildsPostRequest() async throws {
         let session = makeSession()
