@@ -212,6 +212,10 @@ final class APIClient {
         }
 
         guard (200..<300).contains(httpResponse.statusCode) else {
+            if [401, 403].contains(httpResponse.statusCode) {
+                try? keychainStore?.removeToken()
+                NotificationCenter.default.post(name: .sessionExpired, object: nil)
+            }
             let rawBody = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
             if let message = decodeErrorMessage(from: data), !message.isEmpty {
                 throw APIError.serverError(message: message, body: rawBody)

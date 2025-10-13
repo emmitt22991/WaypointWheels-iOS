@@ -59,6 +59,7 @@ final class StubBundle: Bundle {
 
 final class MockKeychainStore: KeychainStoring {
     private(set) var savedToken: String?
+    private(set) var removeTokenCallCount: Int = 0
 
     func save(token: String) throws {
         savedToken = token
@@ -70,6 +71,7 @@ final class MockKeychainStore: KeychainStoring {
 
     func removeToken() throws {
         savedToken = nil
+        removeTokenCallCount += 1
     }
 }
 
@@ -205,6 +207,45 @@ struct APIClientTests {
         let response: SampleResponse = try await client.request(path: "health")
 
         #expect(response.status == "ok")
+    }
+
+    @Test("APIClient clears credentials and notifies when the session expires")
+    func unauthorizedResponseClearsSession() async {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let keychain = MockKeychainStore()
+        try? keychain.save(token: "expired-token")
+        let client = APIClient(session: session, bundle: bundle, keychainStore: keychain)
+
+        var receivedNotifications: [Notification] = []
+        let observer = NotificationCenter.default.addObserver(forName: .sessionExpired, object: nil, queue: nil) { notification in
+            receivedNotifications.append(notification)
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!
+            return (response, Data())
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        do {
+            let _: SampleResponse = try await client.request(path: "health")
+            #expect(false, "Expected unauthorized request to throw an error")
+        } catch let error as APIClient.APIError {
+            switch error {
+            case .invalidResponse, .serverError:
+                break
+            default:
+                #expect(false, "Unexpected APIError: \(error)")
+            }
+        } catch {
+            #expect(false, "Unexpected error: \(error)")
+        }
+
+        #expect(keychain.savedToken == nil)
+        #expect(keychain.removeTokenCallCount == 1)
+        #expect(receivedNotifications.count == 1)
     }
 }
 
@@ -468,6 +509,48 @@ struct TripsViewModelTests {
         #expect(!viewModel.isLoading)
         #expect(viewModel.itinerary.isEmpty)
         #expect(viewModel.errorMessage == "Network down")
+    }
+}
+
+@MainActor
+struct SessionViewModelSignOutTests {
+    @Test("SessionViewModel signs out when the session expiration notification is received")
+    func sessionExpiredNotificationTriggersSignOut() async {
+        let suiteName = "SessionViewModelTests.sessionExpiredNotificationTriggersSignOut"
+        let userDefaults = UserDefaults(suiteName: suiteName)!
+        userDefaults.removePersistentDomain(forName: suiteName)
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+
+        let keychain = MockKeychainStore()
+        try? keychain.save(token: "cached-token")
+        userDefaults.set("Stored User", forKey: "com.stepstonetexas.waypointwheels.name")
+        userDefaults.set("stored@example.com", forKey: "com.stepstonetexas.waypointwheels.email")
+
+        let viewModel = SessionViewModel(apiClient: APIClient(),
+                                         keychainStore: keychain,
+                                         userDefaults: userDefaults,
+                                         makeAuthContext: { StubAuthenticationContext(canEvaluate: false) })
+
+        await Task.yield()
+
+        viewModel.email = "active@example.com"
+        viewModel.password = "secret"
+        viewModel.userName = "Active User"
+        viewModel.isAuthenticated = true
+        viewModel.canUseBiometricLogin = true
+
+        NotificationCenter.default.post(name: .sessionExpired, object: nil)
+        await Task.yield()
+
+        #expect(viewModel.isAuthenticated == false)
+        #expect(viewModel.canUseBiometricLogin == false)
+        #expect(viewModel.userName == nil)
+        #expect(viewModel.email.isEmpty)
+        #expect(viewModel.password.isEmpty)
+        #expect(keychain.savedToken == nil)
+        #expect(keychain.removeTokenCallCount >= 1)
+        #expect(userDefaults.string(forKey: "com.stepstonetexas.waypointwheels.name") == nil)
+        #expect(userDefaults.string(forKey: "com.stepstonetexas.waypointwheels.email") == nil)
     }
 }
 
