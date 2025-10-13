@@ -220,7 +220,7 @@ final class SessionViewModel: ObservableObject {
         do {
             _ = try await apiClient.request(path: "trips/current/", method: "GET") as APIClient.APIResponse<Data>
             return true
-        } catch let apiError as APIClient.APIError {
+        } catch is APIClient.APIError {
             invalidateStoredSession(withMessage: "Session expired")
             return false
         } catch {
