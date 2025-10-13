@@ -24,7 +24,7 @@ struct TripsView: View {
             if viewModel.isLoading {
                 loadingState
             } else if let errorMessage = viewModel.errorMessage {
-                errorState(message: errorMessage)
+                errorState(message: errorMessage, responseBody: viewModel.errorResponseBody)
             } else if viewModel.itinerary.isEmpty {
                 emptyState
                     .listRowBackground(Color.clear)
@@ -125,7 +125,7 @@ struct TripsView: View {
         .listRowBackground(Color.clear)
     }
 
-    private func errorState(message: String) -> some View {
+    private func errorState(message: String, responseBody: String?) -> some View {
         VStack(alignment: .center, spacing: 12) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 44))
@@ -136,6 +136,27 @@ struct TripsView: View {
                 .font(.subheadline)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
+            if let responseBody, !responseBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Server response")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    ScrollView {
+                        Text(responseBody)
+                            .font(.system(.footnote, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 0, maxHeight: 200)
+                    .background(Color(uiColor: .secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
             Button {
                 Task {
                     await viewModel.loadItinerary(forceReload: true)
