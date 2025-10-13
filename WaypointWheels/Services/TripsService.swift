@@ -5,7 +5,7 @@ final class TripsService {
         case missingConfiguration
         case invalidBaseURL(String)
         case invalidResponse
-        case serverError(String)
+        case serverError(message: String, body: String?)
 
         var errorDescription: String? {
             switch self {
@@ -15,9 +15,14 @@ final class TripsService {
                 return "Invalid API base URL: \(value)."
             case .invalidResponse:
                 return "Unexpected response from the trips endpoint."
-            case let .serverError(message):
+            case let .serverError(message, _):
                 return message
             }
+        }
+
+        var responseBody: String? {
+            guard case let .serverError(_, body) = self else { return nil }
+            return body
         }
     }
 
@@ -150,8 +155,8 @@ private extension TripsService.TripsError {
             self = .invalidBaseURL(value)
         case .invalidResponse:
             self = .invalidResponse
-        case let .serverError(message, _):
-            self = .serverError(message)
+        case let .serverError(message, body):
+            self = .serverError(message: message, body: body)
         }
     }
 }
