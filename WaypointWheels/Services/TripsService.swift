@@ -37,6 +37,10 @@ final class TripsService {
             return response.legs
         } catch let error as APIClient.APIError {
             throw TripsError(apiError: error)
+        } catch is DecodingError {
+            throw TripsError.invalidResponse
+        } catch {
+            throw TripsError.invalidResponse
         }
     }
 }
