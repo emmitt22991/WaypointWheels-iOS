@@ -1,11 +1,16 @@
 import Foundation
 
 final class TripsService {
+    struct ItineraryResult: Equatable {
+        let legs: [TripLeg]
+        let rawResponse: String?
+    }
+
     enum TripsError: LocalizedError, Equatable {
         case missingConfiguration
         case invalidBaseURL(String)
-        case invalidResponse
-        case serverError(String)
+        case invalidResponse(rawBody: String?)
+        case serverError(message: String, rawBody: String?)
 
         var errorDescription: String? {
             switch self {
@@ -15,8 +20,19 @@ final class TripsService {
                 return "Invalid API base URL: \(value)."
             case .invalidResponse:
                 return "Unexpected response from the trips endpoint."
-            case let .serverError(message):
+            case let .serverError(message, _):
                 return message
+            }
+        }
+
+        var rawBody: String? {
+            switch self {
+            case let .invalidResponse(rawBody):
+                return rawBody
+            case let .serverError(_, rawBody):
+                return rawBody
+            default:
+                return nil
             }
         }
     }
@@ -127,17 +143,28 @@ final class TripsService {
         self.apiClient = apiClient
     }
 
-    func fetchCurrentItinerary() async throws -> [TripLeg] {
+    func fetchCurrentItineraryResult() async throws -> ItineraryResult {
         do {
-            let response: ItineraryResponse = try await apiClient.request(path: "trips/current/")
-            return response.legs
+            let response: APIClient.APIResponse<Data> = try await apiClient.request(path: "trips/current/", method: "GET")
+
+            do {
+                let itinerary = try apiClient.decode(ItineraryResponse.self, from: response.value)
+                return ItineraryResult(legs: itinerary.legs, rawResponse: response.rawString)
+            } catch is DecodingError {
+                throw TripsError.invalidResponse(rawBody: response.rawString)
+            }
+        } catch let error as TripsError {
+            throw error
         } catch let error as APIClient.APIError {
             throw TripsError(apiError: error)
-        } catch is DecodingError {
-            throw TripsError.invalidResponse
         } catch {
-            throw TripsError.invalidResponse
+            throw TripsError.invalidResponse(rawBody: nil)
         }
+    }
+
+    func fetchCurrentItinerary() async throws -> [TripLeg] {
+        let result = try await fetchCurrentItineraryResult()
+        return result.legs
     }
 }
 
@@ -149,9 +176,9 @@ private extension TripsService.TripsError {
         case let .invalidBaseURL(value):
             self = .invalidBaseURL(value)
         case .invalidResponse:
-            self = .invalidResponse
-        case let .serverError(message, _):
-            self = .serverError(message)
+            self = .invalidResponse(rawBody: nil)
+        case let .serverError(message, body):
+            self = .serverError(message: message, rawBody: body)
         }
     }
 }

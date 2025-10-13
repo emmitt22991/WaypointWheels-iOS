@@ -204,6 +204,10 @@ final class APIClient {
         try await performResponse(request: request).value
     }
 
+    func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+        try decoder.decode(T.self, from: data)
+    }
+
     private func performResponse<T: Decodable>(request: URLRequest) async throws -> APIResponse<T> {
         let (data, response) = try await session.data(for: request)
 
@@ -230,6 +234,10 @@ final class APIClient {
 
         if data.isEmpty, let emptyType = T.self as? EmptyDecodable.Type {
             return APIResponse(value: emptyType.init() as! T, data: data)
+        }
+
+        if T.self == Data.self, let cast = data as? T {
+            return APIResponse(value: cast, data: data)
         }
 
         let decoded = try decoder.decode(T.self, from: data)

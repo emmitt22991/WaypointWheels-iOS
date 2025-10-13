@@ -550,6 +550,32 @@ struct TripsServiceTests {
         #expect(itinerary.isEmpty)
     }
 
+    @Test("TripsService exposes the raw itinerary payload for debugging")
+    func fetchCurrentItineraryResultReturnsRawResponse() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = TripsService(apiClient: apiClient)
+
+        let payload = """
+        {
+            "legs": []
+        }
+        """.data(using: .utf8)!
+        let expectedString = try #require(String(data: payload, encoding: .utf8))
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, payload)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let result = try await service.fetchCurrentItineraryResult()
+
+        #expect(result.legs.isEmpty)
+        #expect(result.rawResponse == expectedString)
+    }
+
     @Test("TripsService maps APIClient errors into TripsError")
     func fetchCurrentItineraryMapsErrors() async {
         let session = makeSession()
@@ -568,14 +594,20 @@ struct TripsServiceTests {
             _ = try await service.fetchCurrentItinerary()
             #expect(false, "Expected fetchCurrentItinerary to throw")
         } catch let error as TripsService.TripsError {
-            #expect(error == .serverError("Trips unavailable"))
+            switch error {
+            case let .serverError(message, rawBody):
+                #expect(message == "Trips unavailable")
+                #expect(rawBody == "{\"message\": \"Trips unavailable\"}")
+            default:
+                #expect(false, "Unexpected TripsError: \(error)")
+            }
         } catch {
             #expect(false, "Unexpected error: \(error)")
         }
     }
 
     @Test("TripsService surfaces invalid responses as TripsError.invalidResponse")
-    func fetchCurrentItineraryHandlesMissingLegs() async {
+    func fetchCurrentItineraryHandlesMissingLegs() async throws {
         let session = makeSession()
         let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
         let apiClient = APIClient(session: session, bundle: bundle)
@@ -586,6 +618,7 @@ struct TripsServiceTests {
             "unexpected": []
         }
         """.data(using: .utf8)!
+        let payloadString = try #require(String(data: payload, encoding: .utf8))
 
         MockURLProtocol.requestHandler = { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
@@ -597,8 +630,13 @@ struct TripsServiceTests {
             _ = try await service.fetchCurrentItinerary()
             #expect(false, "Expected fetchCurrentItinerary to throw")
         } catch let error as TripsService.TripsError {
-            #expect(error == .invalidResponse)
-            #expect(error.errorDescription == "Unexpected response from the trips endpoint.")
+            switch error {
+            case let .invalidResponse(rawBody):
+                #expect(rawBody == payloadString)
+                #expect(error.errorDescription == "Unexpected response from the trips endpoint.")
+            default:
+                #expect(false, "Unexpected TripsError: \(error)")
+            }
         } catch {
             #expect(false, "Unexpected error: \(error)")
         }
@@ -668,6 +706,7 @@ struct TripsViewModelTests {
         #expect(viewModel.errorMessage == nil)
         #expect(viewModel.itinerary.count == 1)
         #expect(viewModel.itinerary.first?.id == "leg-42")
+        #expect(viewModel.debugPayload?.contains("\"legs\"") == true)
     }
 
     @Test("TripsViewModel surfaces errors from the service")
@@ -690,10 +729,11 @@ struct TripsViewModelTests {
         #expect(!viewModel.isLoading)
         #expect(viewModel.itinerary.isEmpty)
         #expect(viewModel.errorMessage == "Network down")
+        #expect(viewModel.debugPayload == "{\"message\": \"Network down\"}")
     }
 
     @Test("TripsViewModel surfaces friendly messaging for invalid responses")
-    func loadItineraryPublishesFriendlyInvalidResponseMessage() async {
+    func loadItineraryPublishesFriendlyInvalidResponseMessage() async throws {
         let session = makeSession()
         let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
         let apiClient = APIClient(session: session, bundle: bundle)
@@ -705,6 +745,7 @@ struct TripsViewModelTests {
             "unexpected": []
         }
         """.data(using: .utf8)!
+        let payloadString = try #require(String(data: payload, encoding: .utf8))
 
         MockURLProtocol.requestHandler = { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
@@ -716,7 +757,8 @@ struct TripsViewModelTests {
 
         #expect(!viewModel.isLoading)
         #expect(viewModel.itinerary.isEmpty)
-        #expect(viewModel.errorMessage == TripsService.TripsError.invalidResponse.errorDescription)
+        #expect(viewModel.errorMessage == TripsService.TripsError.invalidResponse(rawBody: nil).errorDescription)
+        #expect(viewModel.debugPayload == payloadString)
     }
 }
 
