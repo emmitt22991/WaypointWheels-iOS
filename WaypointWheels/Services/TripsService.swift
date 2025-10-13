@@ -21,8 +21,12 @@ final class TripsService {
         }
     }
 
-    struct ItineraryResponse: Decodable {
+    struct ItineraryResponse: Decodable, EmptyDecodable {
         let legs: [TripLeg]
+
+        init() {
+            self.legs = []
+        }
 
         init(from decoder: Decoder) throws {
             // Some responses return an array of legs at the root level.
@@ -49,6 +53,11 @@ final class TripsService {
                 return
             }
 
+            if ItineraryResponse.payloadIsEmpty(decoder: decoder) {
+                self.legs = []
+                return
+            }
+
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
                                                     debugDescription: "Unable to decode itinerary legs from response."))
         }
@@ -69,10 +78,30 @@ final class TripsService {
             return nil
         }
 
+        private static func payloadIsEmpty(decoder: Decoder) -> Bool {
+            guard let container = try? decoder.container(keyedBy: AnyCodingKey.self) else { return false }
+            return container.allKeys.isEmpty
+        }
+
         private enum CodingKeys: String, CodingKey {
             case legs
             case trip
             case itinerary
+        }
+
+        private struct AnyCodingKey: CodingKey {
+            let stringValue: String
+            let intValue: Int?
+
+            init?(stringValue: String) {
+                self.stringValue = stringValue
+                self.intValue = nil
+            }
+
+            init?(intValue: Int) {
+                self.stringValue = "\(intValue)"
+                self.intValue = intValue
+            }
         }
     }
 
