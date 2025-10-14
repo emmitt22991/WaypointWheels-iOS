@@ -60,7 +60,9 @@ final class SessionViewModel: ObservableObject {
                                                                             object: nil,
                                                                             queue: .main) { [weak self] _ in
             guard let self else { return }
-            self.signOut()
+            Task { @MainActor in
+                self.signOut()
+            }
         }
     }
 
