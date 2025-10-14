@@ -93,7 +93,23 @@ struct TripLeg: Identifiable, Hashable, Decodable {
         dateRangeDescription = try container.decode(String.self, forKey: .dateRangeDescription)
         start = try container.decode(TripLocation.self, forKey: .start)
         end = try container.decode(TripLocation.self, forKey: .end)
-        distanceInMiles = try container.decode(Double.self, forKey: .distanceInMiles)
+        do {
+            distanceInMiles = try container.decode(Double.self, forKey: .distanceInMiles)
+        } catch let numericDecodingError {
+            if let stringValue = try? container.decode(String.self, forKey: .distanceInMiles) {
+                guard let parsedValue = Double(stringValue) else {
+                    throw DecodingError.dataCorruptedError(
+                        forKey: .distanceInMiles,
+                        in: container,
+                        debugDescription: "Expected numeric string for distance but found \(stringValue)."
+                    )
+                }
+
+                distanceInMiles = parsedValue
+            } else {
+                throw numericDecodingError
+            }
+        }
         estimatedDriveTime = try container.decode(String.self, forKey: .estimatedDriveTime)
         highlights = try container.decode([String].self, forKey: .highlights)
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
