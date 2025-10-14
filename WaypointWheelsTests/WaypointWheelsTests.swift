@@ -1053,7 +1053,12 @@ struct SessionViewModelTests {
 
         #expect(!viewModel.isAuthenticated)
         #expect(!viewModel.canUseBiometricLogin)
-        #expect(viewModel.errorMessage == "Session expired")
+        #expect(viewModel.errorMessage == "Session expired—please sign in again")
         #expect(keychainStore.savedToken == nil)
+        #expect(keychainStore.removeTokenCallCount == 1)
+        #expect(viewModel.email.isEmpty)
+        #expect(viewModel.userName == nil)
+        #expect(defaults.string(forKey: "com.stepstonetexas.waypointwheels.name") == nil)
+        #expect(defaults.string(forKey: "com.stepstonetexas.waypointwheels.email") == nil)
     }
 }
