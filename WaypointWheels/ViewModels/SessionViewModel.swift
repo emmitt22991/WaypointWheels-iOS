@@ -37,6 +37,7 @@ final class SessionViewModel: ObservableObject {
     private let keychainStore: any KeychainStoring
     private let userDefaults: UserDefaults
     private let makeAuthContext: @MainActor () -> LAContext
+    private let tripsService: TripsService
     private var storedToken: String?
     private var biometricType: LABiometryType = .none
 
@@ -53,6 +54,7 @@ final class SessionViewModel: ObservableObject {
         self.keychainStore = keychainStore
         self.userDefaults = userDefaults
         self.makeAuthContext = makeAuthContext
+        self.tripsService = TripsService(apiClient: apiClient)
 
         configureStoredSession()
     }
@@ -112,17 +114,40 @@ final class SessionViewModel: ObservableObject {
     private func configureStoredSession() {
         do {
             storedToken = try keychainStore.fetchToken()
-            if storedToken != nil {
-                updateBiometricAvailability()
-                activateStoredSession()
-            } else {
+            guard storedToken != nil else {
                 canUseBiometricLogin = false
                 biometricType = .none
+                return
+            }
+
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+
+                do {
+                    _ = try await self.tripsService.fetchCurrentItinerary()
+                    self.updateBiometricAvailability()
+                    self.activateStoredSession()
+                } catch {
+                    self.handleStoredSessionValidationError(error)
+                }
             }
         } catch {
             storedToken = nil
             canUseBiometricLogin = false
             biometricType = .none
+        }
+    }
+
+    private func handleStoredSessionValidationError(_ error: Error) {
+        canUseBiometricLogin = false
+        biometricType = .none
+
+        if let tripsError = error as? TripsService.TripsError,
+           tripsError.isAuthenticationFailure {
+            signOut()
+            errorMessage = "Session expired—please sign in again"
+        } else {
+            errorMessage = error.userFacingMessage
         }
     }
 
@@ -237,5 +262,15 @@ final class SessionViewModel: ObservableObject {
         try? keychainStore.removeToken()
         userDefaults.removeObject(forKey: DefaultsKeys.name)
         userDefaults.removeObject(forKey: DefaultsKeys.email)
+    }
+}
+
+private extension TripsService.TripsError {
+    var isAuthenticationFailure: Bool {
+        guard case let .serverError(message, _) = self else { return false }
+        let normalizedMessage = message.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalizedMessage.contains("authentication required") ||
+            normalizedMessage.contains("unauthorized") ||
+            normalizedMessage.contains("forbidden")
     }
 }
