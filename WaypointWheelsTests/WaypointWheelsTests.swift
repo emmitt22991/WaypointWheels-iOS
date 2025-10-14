@@ -75,6 +75,9 @@ final class MockKeychainStore: KeychainStoring {
     }
 }
 
+private let tripsFixtureExpectedIDs = ["leg-1", "leg-2", "leg-3", "leg-4"]
+private let tripsFixtureExpectedDistances: [Double] = [49.5, 102.0, 96.4, 205.2]
+
 final class StubAuthenticationContext: LAContext {
     private let canEvaluate: Bool
     private let stubBiometryType: LABiometryType
@@ -398,13 +401,7 @@ struct TripsServiceTests {
         let apiClient = APIClient(session: session, bundle: bundle)
         let service = TripsService(apiClient: apiClient)
 
-        let payload = """
-        {
-            "legs": [
-                \(sampleLegJSON)
-            ]
-        }
-        """.data(using: .utf8)!
+        let payload = loadFixtureData(named: "trips_current")
 
         MockURLProtocol.requestHandler = { request in
             #expect(request.url?.absoluteString == "https://example.com/api/trips/current/")
@@ -415,13 +412,17 @@ struct TripsServiceTests {
 
         let itinerary = try await service.fetchCurrentItinerary()
 
-        #expect(itinerary.count == 1)
-        let leg = try #require(itinerary.first)
-        #expect(leg.id == "leg-1")
-        #expect(leg.start.id == "loc-austin")
-        #expect(abs(leg.start.coordinate.latitude - 30.2747) < 0.0001)
-        #expect(abs(leg.end.coordinate.longitude + 97.1467) < 0.0001)
-        #expect(leg.highlights == ["Arrive by lunch for a riverside picnic"])
+        #expect(itinerary.count == tripsFixtureExpectedIDs.count)
+        #expect(itinerary.map(\.id) == tripsFixtureExpectedIDs)
+
+        for (leg, expectedDistance) in zip(itinerary, tripsFixtureExpectedDistances) {
+            #expect(abs(leg.distanceInMiles - expectedDistance) < 0.0001)
+        }
+
+        let firstLeg = try #require(itinerary.first)
+        #expect(firstLeg.start.id == "loc-new-braunfels")
+        #expect(abs(firstLeg.start.coordinate.latitude - 29.703) < 0.0001)
+        #expect(abs(firstLeg.end.coordinate.longitude + 97.7404) < 0.0001)
     }
 
     @Test("TripsService decodes itineraries when the response is an array of legs")
@@ -659,33 +660,8 @@ struct TripsViewModelTests {
         let service = TripsService(apiClient: apiClient)
         let viewModel = TripsViewModel(service: service)
 
-        let payload = """
-        {
-            "legs": [
-                {
-                    "id": "leg-42",
-                    "day_label": "Leg 42",
-                    "date_range_description": "Fri · May 2",
-                    "start": {
-                        "id": "loc-start",
-                        "name": "Start",
-                        "description": "First stop",
-                        "coordinate": {"latitude": 1.0, "longitude": 2.0}
-                    },
-                    "end": {
-                        "id": "loc-end",
-                        "name": "End",
-                        "description": "Final stop",
-                        "coordinate": {"latitude": 3.0, "longitude": 4.0}
-                    },
-                    "distance_in_miles": 10,
-                    "estimated_drive_time": "15 min",
-                    "highlights": ["Highlight"],
-                    "notes": null
-                }
-            ]
-        }
-        """.data(using: .utf8)!
+        let payload = loadFixtureData(named: "trips_current")
+        let payloadString = try #require(String(data: payload, encoding: .utf8))
 
         MockURLProtocol.requestHandler = { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
@@ -704,9 +680,14 @@ struct TripsViewModelTests {
 
         #expect(!viewModel.isLoading)
         #expect(viewModel.errorMessage == nil)
-        #expect(viewModel.itinerary.count == 1)
-        #expect(viewModel.itinerary.first?.id == "leg-42")
-        #expect(viewModel.debugPayload?.contains("\"legs\"") == true)
+        #expect(viewModel.itinerary.count == tripsFixtureExpectedIDs.count)
+        #expect(viewModel.itinerary.map(\.id) == tripsFixtureExpectedIDs)
+
+        for (leg, expectedDistance) in zip(viewModel.itinerary, tripsFixtureExpectedDistances) {
+            #expect(abs(leg.distanceInMiles - expectedDistance) < 0.0001)
+        }
+
+        #expect(viewModel.debugPayload == payloadString)
     }
 
     @Test("TripsViewModel surfaces errors from the service")
@@ -760,6 +741,18 @@ struct TripsViewModelTests {
         #expect(viewModel.errorMessage == TripsService.TripsError.invalidResponse(rawBody: nil).errorDescription)
         #expect(viewModel.debugPayload == payloadString)
     }
+}
+
+private func loadFixtureData(named name: String, file: StaticString = #filePath) -> Data {
+    let currentFileURL = URL(fileURLWithPath: String(file))
+    let directory = currentFileURL
+        .deletingLastPathComponent()
+        .appendingPathComponent("Fixtures")
+    let url = directory.appendingPathComponent("\(name).json")
+    guard let data = try? Data(contentsOf: url) else {
+        fatalError("Unable to load fixture data for \(name).json")
+    }
+    return data
 }
 
 @MainActor
