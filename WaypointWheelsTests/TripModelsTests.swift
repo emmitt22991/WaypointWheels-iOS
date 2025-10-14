@@ -69,4 +69,45 @@ final class TripModelsTests: XCTestCase {
         XCTAssertEqual(tripLegs[0].distanceInMiles, 42.5, accuracy: 0.0001)
         XCTAssertEqual(tripLegs[1].distanceInMiles, 55.75, accuracy: 0.0001)
     }
+
+    func testTripLegDecodesHighlightsFromString() throws {
+        let json = """
+        {
+          "id": "leg-highlights",
+          "day_label": "Day 1",
+          "date_range_description": "Jan 1",
+          "start": {
+            "id": "loc-start",
+            "name": "Start",
+            "description": "Start Location",
+            "coordinate": {
+              "latitude": 1.0,
+              "longitude": 2.0
+            }
+          },
+          "end": {
+            "id": "loc-end",
+            "name": "End",
+            "description": "End Location",
+            "coordinate": {
+              "latitude": 3.0,
+              "longitude": 4.0
+            }
+          },
+          "distance_in_miles": 10.0,
+          "estimated_drive_time": "30 min",
+          "highlights": "• Stop at scenic overlook\n• Grab lunch downtown\nWrap up at campground",
+          "notes": null
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        let leg = try decoder.decode(TripLeg.self, from: json)
+
+        XCTAssertEqual(leg.highlights, [
+            "Stop at scenic overlook",
+            "Grab lunch downtown",
+            "Wrap up at campground",
+        ])
+    }
 }
