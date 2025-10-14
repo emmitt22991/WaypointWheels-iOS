@@ -21,9 +21,14 @@ struct TripLocation: Identifiable, Hashable, Decodable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(String.self, forKey: .id)
+
         name = try container.decode(String.self, forKey: .name)
-        description = try container.decode(String.self, forKey: .description)
+
+        let providedDescription = TripLocation.trimmedNonEmpty(
+            try container.decodeIfPresent(String.self, forKey: .description)
+        )
+        let city = TripLocation.trimmedNonEmpty(try container.decodeIfPresent(String.self, forKey: .city))
+        let state = TripLocation.trimmedNonEmpty(try container.decodeIfPresent(String.self, forKey: .state))
 
         if let coordinateDTO = try? container.decode(CoordinateDTO.self, forKey: .coordinate) {
             coordinate = CLLocationCoordinate2D(
@@ -35,6 +40,15 @@ struct TripLocation: Identifiable, Hashable, Decodable {
             let longitude = try container.decode(Double.self, forKey: .longitude)
             coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
         }
+
+        let providedID = TripLocation.trimmedNonEmpty(try container.decodeIfPresent(String.self, forKey: .id))
+
+        id = providedID
+            ?? TripLocation.makeCoordinateIdentifier(from: coordinate)
+
+        description = providedDescription
+            ?? TripLocation.makeDescription(city: city, state: state)
+            ?? name
     }
 
     static func == (lhs: TripLocation, rhs: TripLocation) -> Bool {
@@ -52,6 +66,37 @@ struct TripLocation: Identifiable, Hashable, Decodable {
         case coordinate
         case latitude
         case longitude
+        case city
+        case state
+    }
+}
+
+private extension TripLocation {
+    static func trimmedNonEmpty(_ string: String?) -> String? {
+        guard let trimmed = string?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
+    }
+
+    static func makeDescription(city: String?, state: String?) -> String? {
+        switch (city, state) {
+        case let (.some(city), .some(state)):
+            return "\(city), \(state)"
+        case let (.some(city), nil):
+            return city
+        case let (nil, .some(state)):
+            return state
+        default:
+            return nil
+        }
+    }
+
+    static func makeCoordinateIdentifier(from coordinate: CLLocationCoordinate2D) -> String {
+        let locale = Locale(identifier: "en_US_POSIX")
+        let latitude = String(format: "%.6f", locale: locale, coordinate.latitude)
+        let longitude = String(format: "%.6f", locale: locale, coordinate.longitude)
+        return "coord_lat_\(latitude)_lon_\(longitude)"
     }
 }
 

@@ -426,6 +426,71 @@ struct TripsServiceTests {
         #expect(abs(firstLeg.end.coordinate.longitude + 97.7404) < 0.0001)
     }
 
+    @Test("TripsService decodes locations that omit description and id")
+    func fetchCurrentItineraryHandlesMissingLocationMetadata() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = TripsService(apiClient: apiClient)
+
+        let payload = """
+        {
+            "data": {
+                "current_trip": {
+                    "itinerary": {
+                        "legs": [
+                            {
+                                "id": "leg-1",
+                                "day_label": "Leg 1",
+                                "date_range_description": "Mon · Apr 14",
+                                "start": {
+                                    "name": "Austin KOA",
+                                    "city": "Austin",
+                                    "state": "TX",
+                                    "coordinate": {
+                                        "latitude": 30.2747,
+                                        "longitude": -97.7404
+                                    }
+                                },
+                                "end": {
+                                    "id": "loc-houston",
+                                    "name": "Houston South RV Resort",
+                                    "city": "Houston",
+                                    "state": "TX",
+                                    "coordinate": {
+                                        "latitude": 29.7604,
+                                        "longitude": -95.3698
+                                    }
+                                },
+                                "distance_in_miles": 165.5,
+                                "estimated_drive_time": "2 hr 45 min",
+                                "highlights": [
+                                    "Top off fresh water before departure"
+                                ]
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+        """.data(using: .utf8)!
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == "https://example.com/api/trips/current/")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, payload)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let itinerary = try await service.fetchCurrentItinerary()
+
+        let leg = try #require(itinerary.first)
+        #expect(leg.start.id == "coord_lat_30.274700_lon_-97.740400")
+        #expect(leg.start.description == "Austin, TX")
+        #expect(leg.end.description == "Houston, TX")
+        #expect(leg.end.id == "loc-houston")
+    }
+
     @Test("TripsService decodes itineraries when the response is an array of legs")
     func fetchCurrentItineraryDecodesRootArray() async throws {
         let session = makeSession()
