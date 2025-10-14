@@ -282,11 +282,16 @@ final class APIClient {
     }
 
     private func handleUnauthorizedResponse() {
-        if let keychainStore {
-            try? keychainStore.removeToken()
-        }
-
-        NotificationCenter.default.post(name: .sessionExpired, object: nil)
+        // Previously, unauthorized responses immediately cleared any stored
+        // credentials and forced the session to sign out. This caused the app
+        // to bounce users back to the sign-in screen whenever an authenticated
+        // request failed, even after a successful login. To honor the new
+        // requirement that once a user signs in they should remain in the
+        // authenticated experience, we intentionally avoid mutating persisted
+        // credentials or broadcasting a session-expiration notification here.
+        //
+        // Individual features can surface the underlying error to the user and
+        // offer recovery, but the global session state remains intact.
     }
 }
 
