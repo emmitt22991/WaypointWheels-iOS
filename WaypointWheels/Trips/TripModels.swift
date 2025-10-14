@@ -106,7 +106,12 @@ struct TripLeg: Identifiable, Hashable, Decodable {
             )
         }
         estimatedDriveTime = try container.decode(String.self, forKey: .estimatedDriveTime)
-        highlights = try container.decode([String].self, forKey: .highlights)
+        if let highlightArray = try? container.decode([String].self, forKey: .highlights) {
+            highlights = highlightArray
+        } else {
+            let rawHighlights = try container.decode(String.self, forKey: .highlights)
+            highlights = TripLeg.normalizeHighlights(from: rawHighlights)
+        }
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
     }
 
@@ -120,6 +125,29 @@ struct TripLeg: Identifiable, Hashable, Decodable {
         case estimatedDriveTime = "estimated_drive_time"
         case highlights
         case notes
+    }
+}
+
+private extension TripLeg {
+    static func normalizeHighlights(from rawString: String) -> [String] {
+        var normalized = rawString.replacingOccurrences(of: "\r\n", with: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let bulletTokens = ["•", "*", "- ", "– ", "— "]
+        for token in bulletTokens {
+            normalized = normalized.replacingOccurrences(of: token, with: "\n")
+        }
+
+        let components = normalized
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        if components.isEmpty, !normalized.isEmpty {
+            return [normalized]
+        }
+
+        return components.isEmpty ? [] : components
     }
 }
 
