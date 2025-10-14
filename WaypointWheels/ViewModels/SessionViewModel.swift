@@ -39,6 +39,7 @@ final class SessionViewModel: ObservableObject {
     private let makeAuthContext: @MainActor () -> LAContext
     private var storedToken: String?
     private var biometricType: LABiometryType = .none
+    private var sessionExpirationObserver: NSObjectProtocol?
 
     private enum DefaultsKeys {
         static let email = "com.stepstonetexas.waypointwheels.email"
@@ -55,6 +56,18 @@ final class SessionViewModel: ObservableObject {
         self.makeAuthContext = makeAuthContext
 
         configureStoredSession()
+        sessionExpirationObserver = NotificationCenter.default.addObserver(forName: .sessionExpired,
+                                                                            object: nil,
+                                                                            queue: .main) { [weak self] _ in
+            guard let self else { return }
+            self.signOut()
+        }
+    }
+
+    deinit {
+        if let sessionExpirationObserver {
+            NotificationCenter.default.removeObserver(sessionExpirationObserver)
+        }
     }
 
     func signIn() {
