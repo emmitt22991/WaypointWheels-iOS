@@ -1,0 +1,134 @@
+{
+  "data": {
+    "current_trip": {
+      "itinerary": {
+        "legs": [
+          {
+            "id": "leg-1",
+            "day_label": "Leg 1",
+            "date_range_description": "Mon · Apr 14",
+            "start": {
+              "id": "loc-new-braunfels",
+              "name": "New Braunfels, TX",
+              "description": "Campground Base",
+              "coordinate": {
+                "latitude": 29.703,
+                "longitude": -98.1245
+              }
+            },
+            "end": {
+              "id": "loc-austin",
+              "name": "Austin, TX",
+              "description": "Pecan Grove RV Park",
+              "coordinate": {
+                "latitude": 30.2747,
+                "longitude": -97.7404
+              }
+            },
+            "distance_in_miles": 49.5,
+            "estimated_drive_time": "1 hr 5 min",
+            "highlights": [
+              "Depart by 8:00 AM to beat the traffic",
+              "Brunch stop at Magnolia Cafe",
+              "Evening stroll through Zilker Park"
+            ],
+            "notes": "Austin is a quick drive — fuel up the night before."
+          },
+          {
+            "id": "leg-2",
+            "day_label": "Leg 2",
+            "date_range_description": "Wed · Apr 16",
+            "start": {
+              "id": "loc-austin",
+              "name": "Austin, TX",
+              "description": "Pecan Grove RV Park",
+              "coordinate": {
+                "latitude": 30.2747,
+                "longitude": -97.7404
+              }
+            },
+            "end": {
+              "id": "loc-waco",
+              "name": "Waco, TX",
+              "description": "Riverview Resort",
+              "coordinate": {
+                "latitude": 31.5493,
+                "longitude": -97.1467
+              }
+            },
+            "distance_in_miles": "102",
+            "estimated_drive_time": "1 hr 45 min",
+            "highlights": [
+              "Arrive by lunch for a riverside picnic",
+              "Tour the Waco Mammoth National Monument",
+              "Book sunset kayaking on the Brazos"
+            ],
+            "notes": "Campground has limited shade — plan for awning setup."
+          },
+          {
+            "id": "leg-3",
+            "day_label": "Leg 3",
+            "date_range_description": "Sat · Apr 19",
+            "start": {
+              "id": "loc-waco",
+              "name": "Waco, TX",
+              "description": "Riverview Resort",
+              "coordinate": {
+                "latitude": 31.5493,
+                "longitude": -97.1467
+              }
+            },
+            "end": {
+              "id": "loc-dallas",
+              "name": "Dallas, TX",
+              "description": "Lake Ray Roberts",
+              "coordinate": {
+                "latitude": 32.7767,
+                "longitude": -96.797
+              }
+            },
+            "distance_in_miles": "96.4",
+            "estimated_drive_time": "1 hr 35 min",
+            "highlights": [
+              "Grab kolaches at Czech Stop on the way",
+              "Set up bikes for the Katy Trail",
+              "Dinner reservation at Trinity Groves"
+            ],
+            "notes": "Expect more traffic approaching Dallas — plan an early arrival."
+          },
+          {
+            "id": "leg-4",
+            "day_label": "Leg 4",
+            "date_range_description": "Tue · Apr 22",
+            "start": {
+              "id": "loc-dallas",
+              "name": "Dallas, TX",
+              "description": "Lake Ray Roberts",
+              "coordinate": {
+                "latitude": 32.7767,
+                "longitude": -96.797
+              }
+            },
+            "end": {
+              "id": "loc-okc",
+              "name": "Oklahoma City, OK",
+              "description": "State Fair Park",
+              "coordinate": {
+                "latitude": 35.4676,
+                "longitude": -97.5164
+              }
+            },
+            "distance_in_miles": 205.2,
+            "estimated_drive_time": "3 hr 15 min",
+            "highlights": [
+              "Stretch break at Turner Falls Park",
+              "Check in before 4:00 PM for full hookups",
+              "Tickets for the Cowboy Museum night tour"
+            ],
+            "notes": "Longest drive of the route — confirm tire pressure before departure."
+          }
+        ]
+      }
+    }
+  }
+}
