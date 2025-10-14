@@ -217,8 +217,7 @@ final class APIClient {
 
         guard (200..<300).contains(httpResponse.statusCode) else {
             if [401, 403].contains(httpResponse.statusCode) {
-                // Allow the app to retain the stored credentials so the user does not get
-                // kicked back to the login screen when the backend returns an auth error.
+                handleUnauthorizedResponse()
             }
             let rawBody = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
             if let message = decodeErrorMessage(from: data), !message.isEmpty {
@@ -280,6 +279,14 @@ final class APIClient {
         }
 
         return nil
+    }
+
+    private func handleUnauthorizedResponse() {
+        if let keychainStore {
+            try? keychainStore.removeToken()
+        }
+
+        NotificationCenter.default.post(name: .sessionExpired, object: nil)
     }
 }
 
