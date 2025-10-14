@@ -116,6 +116,57 @@ final class StubAuthenticationContext: LAContext {
     }
 }
 
+private enum SampleItineraryPayloads {
+    static let mixedDistance: Data = """
+    {
+        "legs": [
+            {
+                "id": "leg-fractional",
+                "day_label": "Leg Fractional",
+                "date_range_description": "Tue · Jun 10",
+                "start": {
+                    "id": "loc-start-fractional",
+                    "name": "Fractional Start",
+                    "description": "Starting point",
+                    "coordinate": { "latitude": 10.0, "longitude": 20.0 }
+                },
+                "end": {
+                    "id": "loc-end-fractional",
+                    "name": "Fractional End",
+                    "description": "Ending point",
+                    "coordinate": { "latitude": 11.0, "longitude": 21.0 }
+                },
+                "distance_in_miles": 102.5,
+                "estimated_drive_time": "2 hr",
+                "highlights": ["See the scenic overlook"],
+                "notes": null
+            },
+            {
+                "id": "leg-string",
+                "day_label": "Leg String",
+                "date_range_description": "Wed · Jun 11",
+                "start": {
+                    "id": "loc-start-string",
+                    "name": "String Start",
+                    "description": "Starting point",
+                    "coordinate": { "latitude": 12.0, "longitude": 22.0 }
+                },
+                "end": {
+                    "id": "loc-end-string",
+                    "name": "String End",
+                    "description": "Ending point",
+                    "coordinate": { "latitude": 13.0, "longitude": 23.0 }
+                },
+                "distance_in_miles": "87.3",
+                "estimated_drive_time": "1 hr 20 min",
+                "highlights": ["Enjoy local cuisine"],
+                "notes": "Try the food truck near the plaza."
+            }
+        ]
+    }
+    """.data(using: .utf8)!
+}
+
 struct APIClientTests {
     struct SampleResponse: Codable, Equatable {
         let status: String
@@ -424,6 +475,32 @@ struct TripsServiceTests {
         #expect(leg.highlights == ["Arrive by lunch for a riverside picnic"])
     }
 
+    @Test("TripsService decodes fractional and string distance values")
+    func fetchCurrentItineraryHandlesFractionalAndStringDistances() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = TripsService(apiClient: apiClient)
+
+        let payload = SampleItineraryPayloads.mixedDistance
+
+        MockURLProtocol.requestHandler = { request in
+            #expect(request.url?.absoluteString == "https://example.com/api/trips/current/")
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, payload)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        let itinerary = try await service.fetchCurrentItinerary()
+
+        #expect(itinerary.count == 2)
+        let fractionalLeg = try #require(itinerary.first(where: { $0.id == "leg-fractional" }))
+        #expect(abs(fractionalLeg.distanceInMiles - 102.5) < 0.0001)
+
+        let stringLeg = try #require(itinerary.first(where: { $0.id == "leg-string" }))
+        #expect(abs(stringLeg.distanceInMiles - 87.3) < 0.0001)
+    }
+
     @Test("TripsService decodes itineraries when the response is an array of legs")
     func fetchCurrentItineraryDecodesRootArray() async throws {
         let session = makeSession()
@@ -659,33 +736,7 @@ struct TripsViewModelTests {
         let service = TripsService(apiClient: apiClient)
         let viewModel = TripsViewModel(service: service)
 
-        let payload = """
-        {
-            "legs": [
-                {
-                    "id": "leg-42",
-                    "day_label": "Leg 42",
-                    "date_range_description": "Fri · May 2",
-                    "start": {
-                        "id": "loc-start",
-                        "name": "Start",
-                        "description": "First stop",
-                        "coordinate": {"latitude": 1.0, "longitude": 2.0}
-                    },
-                    "end": {
-                        "id": "loc-end",
-                        "name": "End",
-                        "description": "Final stop",
-                        "coordinate": {"latitude": 3.0, "longitude": 4.0}
-                    },
-                    "distance_in_miles": 10,
-                    "estimated_drive_time": "15 min",
-                    "highlights": ["Highlight"],
-                    "notes": null
-                }
-            ]
-        }
-        """.data(using: .utf8)!
+        let payload = SampleItineraryPayloads.mixedDistance
 
         MockURLProtocol.requestHandler = { request in
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
@@ -704,8 +755,13 @@ struct TripsViewModelTests {
 
         #expect(!viewModel.isLoading)
         #expect(viewModel.errorMessage == nil)
-        #expect(viewModel.itinerary.count == 1)
-        #expect(viewModel.itinerary.first?.id == "leg-42")
+        #expect(viewModel.itinerary.count == 2)
+        #expect(viewModel.itinerary.first?.id == "leg-fractional")
+        let fractionalLeg = try #require(viewModel.itinerary.first(where: { $0.id == "leg-fractional" }))
+        #expect(abs(fractionalLeg.distanceInMiles - 102.5) < 0.0001)
+
+        let stringLeg = try #require(viewModel.itinerary.first(where: { $0.id == "leg-string" }))
+        #expect(abs(stringLeg.distanceInMiles - 87.3) < 0.0001)
         #expect(viewModel.debugPayload?.contains("\"legs\"") == true)
     }
 
