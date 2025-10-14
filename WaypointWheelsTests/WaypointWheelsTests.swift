@@ -231,13 +231,14 @@ struct APIClientTests {
         #expect(response.status == "ok")
     }
 
-    @Test("APIClient clears credentials and notifies when the session expires")
-    func unauthorizedResponseClearsSession() async {
+    @Test("APIClient leaves credentials intact when the session expires")
+    func unauthorizedResponsePreservesSession() async {
         let session = makeSession()
         let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
         let keychain = MockKeychainStore()
-        try? keychain.save(token: "expired-token")
         let client = APIClient(session: session, bundle: bundle, keychainStore: keychain)
+
+        try? keychain.save(token: "persisted-token")
 
         var receivedNotifications: [Notification] = []
         let observer = NotificationCenter.default.addObserver(forName: .sessionExpired, object: nil, queue: nil) { notification in
@@ -265,9 +266,9 @@ struct APIClientTests {
             #expect(false, "Unexpected error: \(error)")
         }
 
-        #expect(keychain.savedToken == nil)
-        #expect(keychain.removeTokenCallCount == 1)
-        #expect(receivedNotifications.count == 1)
+        #expect(keychain.savedToken == "persisted-token")
+        #expect(keychain.removeTokenCallCount == 0)
+        #expect(receivedNotifications.isEmpty)
     }
 }
 
@@ -757,9 +758,9 @@ private func loadFixtureData(named name: String, file: StaticString = #filePath)
 
 @MainActor
 struct SessionViewModelSignOutTests {
-    @Test("SessionViewModel signs out when the session expiration notification is received")
-    func sessionExpiredNotificationTriggersSignOut() async {
-        let suiteName = "SessionViewModelTests.sessionExpiredNotificationTriggersSignOut"
+    @Test("SessionViewModel ignores session expiration notifications to preserve authentication")
+    func sessionExpiredNotificationDoesNotSignOut() async {
+        let suiteName = "SessionViewModelTests.sessionExpiredNotificationDoesNotSignOut"
         let userDefaults = UserDefaults(suiteName: suiteName)!
         userDefaults.removePersistentDomain(forName: suiteName)
         defer { userDefaults.removePersistentDomain(forName: suiteName) }
@@ -785,15 +786,15 @@ struct SessionViewModelSignOutTests {
         NotificationCenter.default.post(name: .sessionExpired, object: nil)
         await Task.yield()
 
-        #expect(viewModel.isAuthenticated == false)
-        #expect(viewModel.canUseBiometricLogin == false)
-        #expect(viewModel.userName == nil)
-        #expect(viewModel.email.isEmpty)
-        #expect(viewModel.password.isEmpty)
-        #expect(keychain.savedToken == nil)
-        #expect(keychain.removeTokenCallCount >= 1)
-        #expect(userDefaults.string(forKey: "com.stepstonetexas.waypointwheels.name") == nil)
-        #expect(userDefaults.string(forKey: "com.stepstonetexas.waypointwheels.email") == nil)
+        #expect(viewModel.isAuthenticated)
+        #expect(viewModel.canUseBiometricLogin)
+        #expect(viewModel.userName == "Active User")
+        #expect(viewModel.email == "active@example.com")
+        #expect(viewModel.password == "secret")
+        #expect(keychain.savedToken == "cached-token")
+        #expect(keychain.removeTokenCallCount == 0)
+        #expect(userDefaults.string(forKey: "com.stepstonetexas.waypointwheels.name") == "Stored User")
+        #expect(userDefaults.string(forKey: "com.stepstonetexas.waypointwheels.email") == "stored@example.com")
     }
 }
 
