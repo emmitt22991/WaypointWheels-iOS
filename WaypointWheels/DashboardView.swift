@@ -723,7 +723,6 @@ struct DashboardView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
     }
-}
 
     private func dashboardTile(title: String, value: String, detail: String, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
