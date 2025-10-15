@@ -219,7 +219,12 @@ final class APIClient {
             if [401, 403].contains(httpResponse.statusCode) {
                 handleUnauthorizedResponse()
             }
-            let rawBody = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let rawBody: String? = {
+                guard !data.isEmpty else { return nil }
+                let decoded = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+                let trimmed = decoded.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            }()
             if let message = decodeErrorMessage(from: data), !message.isEmpty {
                 throw APIError.serverError(message: message, body: rawBody)
             }
@@ -302,7 +307,9 @@ extension APIClient {
 
         var rawString: String? {
             guard !data.isEmpty else { return nil }
-            return String(data: data, encoding: .utf8)
+            let decoded = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+            let trimmed = decoded.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
         }
     }
 
