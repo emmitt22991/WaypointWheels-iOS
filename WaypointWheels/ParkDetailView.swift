@@ -4,6 +4,7 @@ import PhotosUI
 import UIKit
 #endif
 
+@MainActor
 struct ParkDetailView: View {
     @StateObject private var viewModel: ParkDetailViewModel
     @State private var selectedPhotoItem: PhotosPickerItem?

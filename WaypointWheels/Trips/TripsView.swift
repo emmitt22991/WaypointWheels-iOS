@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct TripsView: View {
     @StateObject private var viewModel: TripsViewModel
     @State private var showDeleteConfirmation: TripLeg?

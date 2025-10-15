@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct DashboardView: View {
     let userName: String
     @State private var isShowingParks = false

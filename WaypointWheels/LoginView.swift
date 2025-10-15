@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct LoginView: View {
     @ObservedObject var viewModel: SessionViewModel
 
