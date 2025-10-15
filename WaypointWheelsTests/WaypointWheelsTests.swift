@@ -807,6 +807,31 @@ struct TripsViewModelTests {
         #expect(viewModel.errorMessage == TripsService.TripsError.invalidResponse(rawBody: nil).errorDescription)
         #expect(viewModel.debugPayload == payloadString)
     }
+
+    @Test("TripsViewModel surfaces payload when response contains invalid UTF-8")
+    func loadItinerarySurfacesInvalidUTF8Payload() async throws {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = TripsService(apiClient: apiClient)
+        let viewModel = TripsViewModel(service: service)
+
+        let invalidUTF8 = Data([0xFF])
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, invalidUTF8)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        await viewModel.loadItinerary(forceReload: true)
+
+        #expect(!viewModel.isLoading)
+        #expect(viewModel.itinerary.isEmpty)
+        #expect(viewModel.errorMessage == TripsService.TripsError.invalidResponse(rawBody: nil).errorDescription)
+        let payload = try #require(viewModel.debugPayload)
+        #expect(!payload.isEmpty)
+    }
 }
 
 private func loadFixtureData(named name: String, file: StaticString = #filePath) -> Data {
