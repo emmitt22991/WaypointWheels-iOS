@@ -230,6 +230,11 @@ struct DashboardView: View {
                         .background(Color(red: 0.28, green: 0.23, blue: 0.52).opacity(0.1), in: Capsule())
                 }
                 .buttonStyle(.plain)
+
+                if let payload = tripsViewModel.debugPayload?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !payload.isEmpty {
+                    debugPayloadCard(payload: payload)
+                }
             }
         } else if let leg = nextLeg {
             VStack(alignment: .leading, spacing: 12) {
@@ -692,9 +697,33 @@ struct DashboardView: View {
                         }
                         .padding(.horizontal, 16)
                     )
-            }
         }
     }
+
+    @ViewBuilder
+    private func debugPayloadCard(payload: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Divider()
+                .padding(.vertical, 2)
+
+            Text("Response Payload")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+
+            ScrollView {
+                Text(payload)
+                    .font(.system(.footnote, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+            }
+            .frame(maxHeight: 150)
+            .background(Color(uiColor: .secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+}
 
     private func dashboardTile(title: String, value: String, detail: String, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
