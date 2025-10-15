@@ -777,6 +777,7 @@ struct TripsViewModelTests {
         #expect(viewModel.itinerary.isEmpty)
         #expect(viewModel.errorMessage == "Network down")
         #expect(viewModel.debugPayload == "{\"message\": \"Network down\"}")
+        #expect(viewModel.debugPayloadCache == "{\"message\": \"Network down\"}")
     }
 
     @Test("TripsViewModel surfaces friendly messaging for invalid responses")
@@ -806,6 +807,7 @@ struct TripsViewModelTests {
         #expect(viewModel.itinerary.isEmpty)
         #expect(viewModel.errorMessage == TripsService.TripsError.invalidResponse(rawBody: nil).errorDescription)
         #expect(viewModel.debugPayload == payloadString)
+        #expect(viewModel.debugPayloadCache == payloadString)
     }
 
     @Test("TripsViewModel surfaces payload when response contains invalid UTF-8")
@@ -831,6 +833,38 @@ struct TripsViewModelTests {
         #expect(viewModel.errorMessage == TripsService.TripsError.invalidResponse(rawBody: nil).errorDescription)
         let payload = try #require(viewModel.debugPayload)
         #expect(!payload.isEmpty)
+        #expect(viewModel.debugPayloadCache == payload)
+    }
+
+    @Test("TripsViewModel clears cached payload when responses omit body content")
+    func loadItineraryClearsDebugPayloadCacheWhenBodyMissing() async {
+        let session = makeSession()
+        let bundle = StubBundle(info: ["API_BASE_URL": "https://example.com/api"])
+        let apiClient = APIClient(session: session, bundle: bundle)
+        let service = TripsService(apiClient: apiClient)
+        let viewModel = TripsViewModel(service: service)
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!
+            let data = "{\n  \"message\": \"Service unavailable\"\n}".data(using: .utf8)!
+            return (response, data)
+        }
+        defer { MockURLProtocol.requestHandler = nil }
+
+        await viewModel.loadItinerary(forceReload: true)
+
+        #expect(viewModel.debugPayload == "{\"message\": \"Service unavailable\"}")
+        #expect(viewModel.debugPayloadCache == "{\"message\": \"Service unavailable\"}")
+
+        MockURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!
+            return (response, Data())
+        }
+
+        await viewModel.loadItinerary(forceReload: true)
+
+        #expect(viewModel.debugPayload == nil)
+        #expect(viewModel.debugPayloadCache == nil)
     }
 }
 

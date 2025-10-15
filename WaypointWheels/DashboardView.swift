@@ -231,8 +231,7 @@ struct DashboardView: View {
                 }
                 .buttonStyle(.plain)
 
-                if let payload = tripsViewModel.debugPayload?.trimmingCharacters(in: .whitespacesAndNewlines),
-                   !payload.isEmpty {
+                if let payload = tripsViewModel.debugPayloadCache {
                     debugPayloadCard(payload: payload)
                 }
             }
