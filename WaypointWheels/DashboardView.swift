@@ -88,7 +88,11 @@ struct DashboardView: View {
         }
     }
 
-    private var heroSection: some View {
+}
+
+private extension DashboardView {
+
+    var heroSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             if #available(iOS 16.0, *) {
                 ViewThatFits {
@@ -126,7 +130,7 @@ struct DashboardView: View {
         }
     }
 
-    private var travelHighlights: some View {
+    var travelHighlights: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 Text("Trip Toolkit")
@@ -198,7 +202,7 @@ struct DashboardView: View {
     }
 
     @ViewBuilder
-    private var nextStopCardContent: some View {
+    var nextStopCardContent: some View {
         if tripsViewModel.isLoading {
             VStack(spacing: 12) {
                 ProgressView()
@@ -275,7 +279,7 @@ struct DashboardView: View {
         }
     }
 
-    private func tripRouteSummary(for leg: TripLeg) -> some View {
+    func tripRouteSummary(for leg: TripLeg) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 routeLocationPill(title: "Depart", value: leg.start.name, color: Color(red: 0.27, green: 0.64, blue: 0.56))
@@ -294,7 +298,7 @@ struct DashboardView: View {
         }
     }
 
-    private func routeLocationPill(title: String, value: String, color: Color) -> some View {
+    func routeLocationPill(title: String, value: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title.uppercased())
                 .font(.caption2)
@@ -314,11 +318,11 @@ struct DashboardView: View {
         .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    private func tripMetricsDescription(for leg: TripLeg) -> String {
+    func tripMetricsDescription(for leg: TripLeg) -> String {
         "\(formattedMiles(leg.distanceInMiles)) • \(leg.estimatedDriveTime)"
     }
 
-    private func formattedMiles(_ miles: Double) -> String {
+    func formattedMiles(_ miles: Double) -> String {
         let rounded = miles.rounded()
         if abs(rounded - miles) < 0.05 {
             return String(format: "%.0f mi", rounded)
@@ -327,7 +331,7 @@ struct DashboardView: View {
         return String(format: "%.1f mi", miles)
     }
 
-    private func primaryHighlight(for leg: TripLeg) -> String? {
+    func primaryHighlight(for leg: TripLeg) -> String? {
         if let firstHighlight = leg.highlights.first, !firstHighlight.isEmpty {
             return firstHighlight
         }
@@ -339,7 +343,7 @@ struct DashboardView: View {
         return nil
     }
 
-    private var communityPulse: some View {
+    var communityPulse: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 Text("Community Pulse")
@@ -407,7 +411,7 @@ struct DashboardView: View {
         }
     }
 
-    private var parksPreview: some View {
+    var parksPreview: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 Text("Parks Visited By Membership")
@@ -441,7 +445,7 @@ struct DashboardView: View {
         }
     }
 
-    private var photoGrid: some View {
+    var photoGrid: some View {
         HStack(spacing: 12) {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(red: 0.86, green: 0.73, blue: 0.93))
@@ -470,7 +474,7 @@ struct DashboardView: View {
         }
     }
 
-    private var bottomNavigation: some View {
+    var bottomNavigation: some View {
         VStack(spacing: 0) {
             Divider()
                 .background(Color.black.opacity(0.1))
@@ -520,7 +524,7 @@ struct DashboardView: View {
         .background(Color.white.opacity(0.9))
     }
 
-    private func bottomNavItem(label: String, systemImage: String) -> some View {
+    func bottomNavItem(label: String, systemImage: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: systemImage)
                 .font(.title3)
@@ -532,7 +536,7 @@ struct DashboardView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var heroHeader: some View {
+    var heroHeader: some View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 36, style: .continuous)
                 .fill(Color(red: 0.69, green: 0.86, blue: 0.92).opacity(0.45))
@@ -626,7 +630,7 @@ struct DashboardView: View {
     }
 
     @ViewBuilder
-    private var heroProfile: some View {
+    var heroProfile: some View {
         if isCompactWidth {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Let's get this show on the road!")
@@ -700,7 +704,7 @@ struct DashboardView: View {
     }
 
     @ViewBuilder
-    private func debugPayloadCard(payload: String) -> some View {
+    func debugPayloadCard(payload: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Divider()
                 .padding(.vertical, 2)
@@ -723,7 +727,7 @@ struct DashboardView: View {
         }
     }
 
-    private func dashboardTile(title: String, value: String, detail: String, icon: String) -> some View {
+    func dashboardTile(title: String, value: String, detail: String, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 8) {
                 Image(systemName: icon)
@@ -746,7 +750,7 @@ struct DashboardView: View {
         .background(Color.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
-    private func timelineRow(title: String, detail: String, symbol: String) -> some View {
+    func timelineRow(title: String, detail: String, symbol: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: symbol)
                 .font(.headline)
@@ -763,7 +767,7 @@ struct DashboardView: View {
         }
     }
 
-    private func checklistRow(item: Checklist.Item) -> some View {
+    func checklistRow(item: Checklist.Item) -> some View {
         HStack(spacing: 12) {
             Image(systemName: item.isComplete ? "checkmark.circle.fill" : "circle")
                 .foregroundStyle(item.isComplete ? Color.green : Color.secondary)
@@ -787,7 +791,7 @@ struct DashboardView: View {
         .background(Color.white.opacity(0.85), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private var featuredChecklistSubtitle: String {
+    var featuredChecklistSubtitle: String {
         if let title = checklistsViewModel.featuredChecklist?.title, !title.isEmpty {
             return title
         }
@@ -795,7 +799,7 @@ struct DashboardView: View {
         return "Your travel tasks"
     }
 
-    private func statRow(label: String, value: String, footnote: String) -> some View {
+    func statRow(label: String, value: String, footnote: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(label)
@@ -814,7 +818,7 @@ struct DashboardView: View {
         }
     }
 
-    private func discussionRow(topic: String, detail: String, timeAgo: String) -> some View {
+    func discussionRow(topic: String, detail: String, timeAgo: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(topic)
@@ -833,7 +837,7 @@ struct DashboardView: View {
         }
     }
 
-    private func parkCard(name: String, state: String, imageName: String) -> some View {
+    func parkCard(name: String, state: String, imageName: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(LinearGradient(colors: [Color(red: 0.83, green: 0.74, blue: 0.96), Color.white], startPoint: .topLeading, endPoint: .bottomTrailing))
