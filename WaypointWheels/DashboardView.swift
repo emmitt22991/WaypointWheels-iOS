@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct DashboardView: View {
     let userName: String
     @State private var isShowingParks = false
@@ -88,11 +89,7 @@ struct DashboardView: View {
         }
     }
 
-}
-
-private extension DashboardView {
-
-    var heroSection: some View {
+    private var heroSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             if #available(iOS 16.0, *) {
                 ViewThatFits {
@@ -130,7 +127,7 @@ private extension DashboardView {
         }
     }
 
-    var travelHighlights: some View {
+    private var travelHighlights: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 Text("Trip Toolkit")
@@ -202,7 +199,7 @@ private extension DashboardView {
     }
 
     @ViewBuilder
-    var nextStopCardContent: some View {
+    private var nextStopCardContent: some View {
         if tripsViewModel.isLoading {
             VStack(spacing: 12) {
                 ProgressView()
@@ -279,7 +276,7 @@ private extension DashboardView {
         }
     }
 
-    func tripRouteSummary(for leg: TripLeg) -> some View {
+    private func tripRouteSummary(for leg: TripLeg) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 routeLocationPill(title: "Depart", value: leg.start.name, color: Color(red: 0.27, green: 0.64, blue: 0.56))
@@ -298,7 +295,7 @@ private extension DashboardView {
         }
     }
 
-    func routeLocationPill(title: String, value: String, color: Color) -> some View {
+    private func routeLocationPill(title: String, value: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title.uppercased())
                 .font(.caption2)
@@ -318,11 +315,11 @@ private extension DashboardView {
         .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    func tripMetricsDescription(for leg: TripLeg) -> String {
+    private func tripMetricsDescription(for leg: TripLeg) -> String {
         "\(formattedMiles(leg.distanceInMiles)) • \(leg.estimatedDriveTime)"
     }
 
-    func formattedMiles(_ miles: Double) -> String {
+    private func formattedMiles(_ miles: Double) -> String {
         let rounded = miles.rounded()
         if abs(rounded - miles) < 0.05 {
             return String(format: "%.0f mi", rounded)
@@ -331,7 +328,7 @@ private extension DashboardView {
         return String(format: "%.1f mi", miles)
     }
 
-    func primaryHighlight(for leg: TripLeg) -> String? {
+    private func primaryHighlight(for leg: TripLeg) -> String? {
         if let firstHighlight = leg.highlights.first, !firstHighlight.isEmpty {
             return firstHighlight
         }
@@ -343,7 +340,7 @@ private extension DashboardView {
         return nil
     }
 
-    var communityPulse: some View {
+    private var communityPulse: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 Text("Community Pulse")
@@ -411,7 +408,7 @@ private extension DashboardView {
         }
     }
 
-    var parksPreview: some View {
+    private var parksPreview: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
                 Text("Parks Visited By Membership")
@@ -445,7 +442,7 @@ private extension DashboardView {
         }
     }
 
-    var photoGrid: some View {
+    private var photoGrid: some View {
         HStack(spacing: 12) {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(red: 0.86, green: 0.73, blue: 0.93))
@@ -474,7 +471,7 @@ private extension DashboardView {
         }
     }
 
-    var bottomNavigation: some View {
+    private var bottomNavigation: some View {
         VStack(spacing: 0) {
             Divider()
                 .background(Color.black.opacity(0.1))
@@ -524,7 +521,7 @@ private extension DashboardView {
         .background(Color.white.opacity(0.9))
     }
 
-    func bottomNavItem(label: String, systemImage: String) -> some View {
+    private func bottomNavItem(label: String, systemImage: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: systemImage)
                 .font(.title3)
@@ -536,7 +533,7 @@ private extension DashboardView {
         .frame(maxWidth: .infinity)
     }
 
-    var heroHeader: some View {
+    private var heroHeader: some View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 36, style: .continuous)
                 .fill(Color(red: 0.69, green: 0.86, blue: 0.92).opacity(0.45))
@@ -630,7 +627,7 @@ private extension DashboardView {
     }
 
     @ViewBuilder
-    var heroProfile: some View {
+    private var heroProfile: some View {
         if isCompactWidth {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Let's get this show on the road!")
@@ -704,7 +701,7 @@ private extension DashboardView {
     }
 
     @ViewBuilder
-    func debugPayloadCard(payload: String) -> some View {
+    private func debugPayloadCard(payload: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Divider()
                 .padding(.vertical, 2)
@@ -727,7 +724,7 @@ private extension DashboardView {
         }
     }
 
-    func dashboardTile(title: String, value: String, detail: String, icon: String) -> some View {
+    private func dashboardTile(title: String, value: String, detail: String, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 8) {
                 Image(systemName: icon)
@@ -750,7 +747,7 @@ private extension DashboardView {
         .background(Color.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
-    func timelineRow(title: String, detail: String, symbol: String) -> some View {
+    private func timelineRow(title: String, detail: String, symbol: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: symbol)
                 .font(.headline)
@@ -767,7 +764,7 @@ private extension DashboardView {
         }
     }
 
-    func checklistRow(item: Checklist.Item) -> some View {
+    private func checklistRow(item: Checklist.Item) -> some View {
         HStack(spacing: 12) {
             Image(systemName: item.isComplete ? "checkmark.circle.fill" : "circle")
                 .foregroundStyle(item.isComplete ? Color.green : Color.secondary)
@@ -791,7 +788,7 @@ private extension DashboardView {
         .background(Color.white.opacity(0.85), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    var featuredChecklistSubtitle: String {
+    private var featuredChecklistSubtitle: String {
         if let title = checklistsViewModel.featuredChecklist?.title, !title.isEmpty {
             return title
         }
@@ -799,7 +796,7 @@ private extension DashboardView {
         return "Your travel tasks"
     }
 
-    func statRow(label: String, value: String, footnote: String) -> some View {
+    private func statRow(label: String, value: String, footnote: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(label)
@@ -818,7 +815,7 @@ private extension DashboardView {
         }
     }
 
-    func discussionRow(topic: String, detail: String, timeAgo: String) -> some View {
+    private func discussionRow(topic: String, detail: String, timeAgo: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(topic)
@@ -837,7 +834,7 @@ private extension DashboardView {
         }
     }
 
-    func parkCard(name: String, state: String, imageName: String) -> some View {
+    private func parkCard(name: String, state: String, imageName: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(LinearGradient(colors: [Color(red: 0.83, green: 0.74, blue: 0.96), Color.white], startPoint: .topLeading, endPoint: .bottomTrailing))
