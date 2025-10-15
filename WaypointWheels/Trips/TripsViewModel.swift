@@ -6,6 +6,7 @@ final class TripsViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var debugPayload: String?
+    @Published private(set) var debugPayloadCache: String?
 
     private let service: TripsService
     private var hasLoaded: Bool
@@ -14,6 +15,7 @@ final class TripsViewModel: ObservableObject {
         self.service = service
         self.itinerary = initialItinerary
         self.debugPayload = nil
+        self.debugPayloadCache = nil
         self.hasLoaded = !initialItinerary.isEmpty
     }
 
@@ -23,15 +25,15 @@ final class TripsViewModel: ObservableObject {
 
         isLoading = true
         errorMessage = nil
-        debugPayload = nil
+        cacheDebugPayload(nil)
 
         do {
             let result = try await service.fetchCurrentItineraryResult()
             itinerary = result.legs
-            debugPayload = result.rawResponse
+            cacheDebugPayload(result.rawResponse)
             hasLoaded = true
         } catch let serviceError as TripsService.TripsError {
-            debugPayload = serviceError.rawBody
+            cacheDebugPayload(serviceError.rawBody)
             errorMessage = serviceError.userFacingMessage
         } catch {
             errorMessage = error.userFacingMessage
@@ -42,5 +44,17 @@ final class TripsViewModel: ObservableObject {
 
     func removeLeg(_ leg: TripLeg) {
         itinerary.removeAll { $0.id == leg.id }
+    }
+
+    private func cacheDebugPayload(_ payload: String?) {
+        debugPayload = payload
+
+        guard let trimmed = payload?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
+            debugPayloadCache = nil
+            return
+        }
+
+        debugPayloadCache = trimmed
     }
 }

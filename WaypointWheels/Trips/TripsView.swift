@@ -49,8 +49,7 @@ struct TripsView: View {
                 }
             }
 
-            if let payload = viewModel.debugPayload,
-               !payload.isEmpty,
+            if let payload = viewModel.debugPayloadCache,
                !viewModel.isLoading,
                viewModel.errorMessage == nil {
                 Section {
@@ -158,7 +157,7 @@ struct TripsView: View {
             }
             .buttonStyle(.borderedProminent)
 
-            if let payload = viewModel.debugPayload, !payload.isEmpty {
+            if let payload = viewModel.debugPayloadCache {
                 debugPayloadView(payload: payload)
             }
         }
