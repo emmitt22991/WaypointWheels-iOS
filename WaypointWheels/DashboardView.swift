@@ -5,6 +5,7 @@ struct DashboardView: View {
     @State private var isShowingParks = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var checklistsViewModel = ChecklistsViewModel()
+    @StateObject private var tripsViewModel = TripsViewModel()
     @State private var showingChecklists = false
 
     private let accentGradient = LinearGradient(colors: [
@@ -34,6 +35,26 @@ struct DashboardView: View {
         [GridItem(.adaptive(minimum: isCompactWidth ? 260 : 300), spacing: 16)]
     }
 
+    private var nextLeg: TripLeg? {
+        tripsViewModel.itinerary.first
+    }
+
+    private var nextStopSubtitle: String {
+        if let leg = nextLeg {
+            return leg.end.name
+        }
+
+        if tripsViewModel.isLoading {
+            return "Loading itinerary…"
+        }
+
+        if tripsViewModel.errorMessage != nil {
+            return "Trip unavailable"
+        }
+
+        return "Plan your first route"
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             heroBackgroundGradient
@@ -51,12 +72,19 @@ struct DashboardView: View {
                     .padding(.top, 32)
                     .padding(.bottom, 120)
                 }
+                .refreshable {
+                    await tripsViewModel.loadItinerary(forceReload: true)
+                    await checklistsViewModel.refresh()
+                }
 
                 bottomNavigation
             }
         }
         .sheet(isPresented: $showingChecklists) {
             ChecklistsView(viewModel: checklistsViewModel)
+        }
+        .task {
+            await tripsViewModel.loadItinerary()
         }
     }
 
@@ -105,7 +133,9 @@ struct DashboardView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                 Spacer()
-                Button(action: {}) {
+                NavigationLink {
+                    TripsView(viewModel: tripsViewModel)
+                } label: {
                     Label("View Trip Calendar", systemImage: "calendar.badge.clock")
                         .font(.subheadline)
                         .padding(.horizontal, 16)
@@ -116,15 +146,8 @@ struct DashboardView: View {
             }
 
             LazyVGrid(columns: contentColumns, alignment: .leading, spacing: 16) {
-                DashboardCard(title: "Next Stop", subtitle: "Austin, TX", accent: accentGradient) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        timelineRow(title: "Depart", detail: "Mon · 8:00 AM", symbol: "arrow.up.right")
-                        timelineRow(title: "Arrive", detail: "Mon · 11:30 AM", symbol: "flag.checkered")
-                        Divider().padding(.vertical, 4)
-                        Text("Fuel up before you roll out. The weather looks ideal for travel — no storms on the radar.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
+                DashboardCard(title: "Next Stop", subtitle: nextStopSubtitle, accent: accentGradient) {
+                    nextStopCardContent
                 }
 
                 DashboardCard(title: "Checklist", subtitle: featuredChecklistSubtitle, accent: accentGradient) {
@@ -172,6 +195,144 @@ struct DashboardView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var nextStopCardContent: some View {
+        if tripsViewModel.isLoading {
+            VStack(spacing: 12) {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                Text("Fetching your route…")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        } else if let errorMessage = tripsViewModel.errorMessage {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("We couldn't load your trip", systemImage: "exclamationmark.triangle.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.orange)
+
+                Text(errorMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    Task { await tripsViewModel.loadItinerary(forceReload: true) }
+                } label: {
+                    Text("Try Again")
+                        .font(.footnote)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Color(red: 0.28, green: 0.23, blue: 0.52).opacity(0.1), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        } else if let leg = nextLeg {
+            VStack(alignment: .leading, spacing: 12) {
+                tripRouteSummary(for: leg)
+                timelineRow(title: "Travel Day", detail: leg.dateRangeDescription, symbol: "calendar")
+                timelineRow(title: "Drive", detail: tripMetricsDescription(for: leg), symbol: "road.lanes")
+
+                if let highlight = primaryHighlight(for: leg) {
+                    Divider()
+                        .padding(.vertical, 4)
+
+                    Text(highlight)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("No trip legs yet", systemImage: "calendar")
+                    .font(.subheadline)
+
+                Text("Add your first route leg from Trips to see upcoming stops here.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                NavigationLink {
+                    TripsView(viewModel: tripsViewModel)
+                } label: {
+                    Text("Plan a Trip")
+                        .font(.footnote)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Color(red: 0.28, green: 0.23, blue: 0.52).opacity(0.1), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func tripRouteSummary(for leg: TripLeg) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                routeLocationPill(title: "Depart", value: leg.start.name, color: Color(red: 0.27, green: 0.64, blue: 0.56))
+
+                Image(systemName: "arrow.forward")
+                    .font(.headline)
+                    .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
+
+                routeLocationPill(title: "Arrive", value: leg.end.name, color: Color(red: 0.91, green: 0.50, blue: 0.30))
+            }
+
+            Text(leg.dayLabel)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func routeLocationPill(title: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title.uppercased())
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func tripMetricsDescription(for leg: TripLeg) -> String {
+        "\(formattedMiles(leg.distanceInMiles)) • \(leg.estimatedDriveTime)"
+    }
+
+    private func formattedMiles(_ miles: Double) -> String {
+        let rounded = miles.rounded()
+        if abs(rounded - miles) < 0.05 {
+            return String(format: "%.0f mi", rounded)
+        }
+
+        return String(format: "%.1f mi", miles)
+    }
+
+    private func primaryHighlight(for leg: TripLeg) -> String? {
+        if let firstHighlight = leg.highlights.first, !firstHighlight.isEmpty {
+            return firstHighlight
+        }
+
+        if let notes = leg.notes?.trimmingCharacters(in: .whitespacesAndNewlines), !notes.isEmpty {
+            return notes
+        }
+
+        return nil
     }
 
     private var communityPulse: some View {
@@ -317,7 +478,7 @@ struct DashboardView: View {
                 .buttonStyle(.plain)
 
                 NavigationLink {
-                    TripsView()
+                    TripsView(viewModel: tripsViewModel)
                 } label: {
                     bottomNavItem(label: "Trips", systemImage: "map")
                 }
