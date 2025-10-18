@@ -26,17 +26,39 @@ final class TripsViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         cacheDebugPayload(nil)
+        
+        // Debug: Check auth status
+        #if DEBUG
+        checkAuthStatus()
+        #endif
 
         do {
             let result = try await service.fetchCurrentItineraryResult()
             itinerary = result.legs
             cacheDebugPayload(result.rawResponse)
             hasLoaded = true
+            
+            // Clear any previous errors if successful
+            errorMessage = nil
         } catch let serviceError as TripsService.TripsError {
             cacheDebugPayload(serviceError.rawBody)
-            errorMessage = serviceError.userFacingMessage
+            
+            // Handle "no active trip" specially - don't show error, just empty state
+            if case .noActiveTrip = serviceError {
+                itinerary = []
+                hasLoaded = true
+                errorMessage = nil
+            } else {
+                errorMessage = serviceError.userFacingMessage
+            }
         } catch {
-            errorMessage = error.userFacingMessage
+            // Handle other errors
+            if let localizedError = error as? LocalizedError,
+               let description = localizedError.errorDescription {
+                errorMessage = description
+            } else {
+                errorMessage = "An unexpected error occurred."
+            }
         }
 
         isLoading = false
@@ -57,4 +79,34 @@ final class TripsViewModel: ObservableObject {
 
         debugPayloadCache = trimmed
     }
+    
+    // MARK: - Debug Helpers
+    
+    #if DEBUG
+    private func checkAuthStatus() {
+        print("🔐 Checking authentication status...")
+        
+        let keychainStore = KeychainStore()
+        do {
+            if let token = try keychainStore.fetchToken() {
+                if token.isEmpty {
+                    print("❌ Token is empty")
+                } else {
+                    print("✅ Token exists (length: \(token.count))")
+                    
+                    if token.components(separatedBy: ".").count == 3 {
+                        print("✅ Token appears to be a valid JWT format")
+                    } else {
+                        print("⚠️ Token doesn't look like a JWT")
+                    }
+                }
+            } else {
+                print("❌ No token found in keychain")
+                print("💡 User needs to log in first")
+            }
+        } catch {
+            print("❌ Error reading token from keychain: \(error)")
+        }
+    }
+    #endif
 }

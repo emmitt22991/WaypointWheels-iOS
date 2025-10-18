@@ -11,6 +11,7 @@ final class TripsService {
         case invalidBaseURL(String)
         case invalidResponse(rawBody: String?)
         case serverError(message: String, rawBody: String?)
+        case noActiveTrip
 
         var errorDescription: String? {
             switch self {
@@ -22,6 +23,8 @@ final class TripsService {
                 return "Unexpected response from the trips endpoint."
             case let .serverError(message, _):
                 return message
+            case .noActiveTrip:
+                return "No active trip is scheduled."
             }
         }
 
@@ -34,6 +37,10 @@ final class TripsService {
             default:
                 return nil
             }
+        }
+        
+        var userFacingMessage: String {
+            errorDescription ?? "An unexpected error occurred."
         }
     }
 
@@ -145,18 +152,95 @@ final class TripsService {
 
     func fetchCurrentItineraryResult() async throws -> ItineraryResult {
         do {
+            // Debug: Print the full URL being requested
+            print("🔍 Fetching current trip from API...")
+            print("📍 Attempting path: trips/current/")
+            
+            // Build the URL to see what we're actually calling
+            do {
+                let testURL = try apiClient.url(for: "trips/current/")
+                print("📍 Full URL will be: \(testURL.absoluteString)")
+            } catch {
+                print("❌ Error building URL: \(error)")
+            }
+            
+            // Path: trips/current/ (base URL already includes /api)
             let response: APIClient.APIResponse<Data> = try await apiClient.request(path: "trips/current/", method: "GET")
-
+            
+            // Debug: Print response status
+            print("✅ API Response received")
+            print("📄 Raw response: \(response.rawString ?? "nil")")
+            
             do {
                 let itinerary = try apiClient.decode(ItineraryResponse.self, from: response.value)
-                return ItineraryResult(legs: itinerary.legs, rawResponse: response.rawString)
+                
+                // Ensure each leg has a valid ID
+                let legsWithIDs = itinerary.legs.enumerated().map { index, leg in
+                    if leg.id.isEmpty {
+                        return TripLeg(
+                            id: "leg-\(index + 1)",
+                            dayLabel: leg.dayLabel,
+                            dateRangeDescription: leg.dateRangeDescription,
+                            start: leg.start,
+                            end: leg.end,
+                            distanceInMiles: leg.distanceInMiles,
+                            estimatedDriveTime: leg.estimatedDriveTime,
+                            highlights: leg.highlights,
+                            notes: leg.notes
+                        )
+                    }
+                    return leg
+                }
+                
+                print("✅ Successfully decoded \(legsWithIDs.count) trip legs")
+                return ItineraryResult(legs: legsWithIDs, rawResponse: response.rawString)
             } catch is DecodingError {
+                // Check if response is HTML (404/401 page)
+                if let rawString = response.rawString,
+                   rawString.contains("<!DOCTYPE") || rawString.contains("<html") {
+                    
+                    // Check for authentication error
+                    if rawString.lowercased().contains("authentication required") {
+                        print("❌ Authentication required - please log in")
+                        throw TripsError.serverError(
+                            message: "Please sign in to view your trips.",
+                            rawBody: rawString
+                        )
+                    }
+                    
+                    print("❌ Received HTML instead of JSON - likely wrong endpoint URL")
+                    throw TripsError.serverError(
+                        message: "API endpoint not found. Please check your configuration.",
+                        rawBody: rawString
+                    )
+                }
+                print("❌ Failed to decode response")
                 throw TripsError.invalidResponse(rawBody: response.rawString)
             }
         } catch let error as TripsError {
             throw error
         } catch let error as APIClient.APIError {
-            throw TripsError(apiError: error)
+            let tripsError = TripsError(apiError: error)
+            
+            // Check if this is an authentication error
+            if case let .serverError(message, body) = tripsError {
+                // Check for authentication-related errors
+                if message.lowercased().contains("authentication required") ||
+                   message.lowercased().contains("authentication") ||
+                   body?.lowercased().contains("authentication required") == true {
+                    throw TripsError.serverError(
+                        message: "Please sign in to view your trips.",
+                        rawBody: body
+                    )
+                }
+                
+                // Check if this is a "no active trip" error (404 or specific message)
+                if message.lowercased().contains("no active trip") {
+                    throw TripsError.noActiveTrip
+                }
+            }
+            
+            throw tripsError
         } catch {
             throw TripsError.invalidResponse(rawBody: nil)
         }
@@ -178,7 +262,12 @@ private extension TripsService.TripsError {
         case .invalidResponse:
             self = .invalidResponse(rawBody: nil)
         case let .serverError(message, body):
-            self = .serverError(message: message, rawBody: body)
+            // Check for 404 "no active trip" case
+            if message.lowercased().contains("no active trip") {
+                self = .noActiveTrip
+            } else {
+                self = .serverError(message: message, rawBody: body)
+            }
         }
     }
 }

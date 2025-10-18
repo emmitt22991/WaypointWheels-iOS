@@ -1,11 +1,23 @@
 import Foundation
 
 extension Error {
-    /// Returns a user-friendly description of the error that is safe to show in the UI.
     var userFacingMessage: String {
-        localizedDescription.sanitizedForDisplay()
+        // Check for TripsService.TripsError first
+        if let tripsError = self as? TripsService.TripsError {
+            return tripsError.userFacingMessage
+        }
+        
+        // Check for LocalizedError
+        if let localizedError = self as? LocalizedError,
+           let description = localizedError.errorDescription {
+            return description
+        }
+        
+        // Fallback to generic message
+        return "An unexpected error occurred."
     }
 }
+
 
 private extension String {
     func sanitizedForDisplay() -> String {
@@ -22,3 +34,5 @@ private extension String {
         return trimmed
     }
 }
+
+
