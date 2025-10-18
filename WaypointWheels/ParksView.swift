@@ -18,7 +18,7 @@ struct ParksView: View {
                 filtersSection
                 resultsSection
             }
-            .listStyle(.insetGrouped)
+            .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(backgroundGradient)
             .navigationTitle("Parks")
@@ -44,6 +44,7 @@ struct ParksView: View {
 
     private var filtersSection: some View {
         Section("Filters") {
+            sortPicker
             membershipPicker
             Toggle(isOn: $viewModel.showFamilyFavoritesOnly.animation(.easeInOut)) {
                 Label("Show family favorites (4★+)", systemImage: "star.fill")
@@ -53,6 +54,21 @@ struct ParksView: View {
             statePicker
         }
         .listRowBackground(Color.clear)
+    }
+
+    private var sortPicker: some View {
+        HStack {
+            Label("Sort by", systemImage: "arrow.up.arrow.down")
+                .font(.subheadline)
+                .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
+            Spacer()
+            Picker("Sort by", selection: $viewModel.sortOption) {
+                ForEach(ParksViewModel.SortOption.allCases) { option in
+                    Text(option.displayName).tag(option)
+                }
+            }
+            .pickerStyle(.menu)
+        }
     }
 
     private var membershipPicker: some View {
@@ -112,12 +128,14 @@ struct ParksView: View {
                     errorBanner(error)
                         .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 0, trailing: 0))
                 }
+                tableHeader
                 ForEach(viewModel.filteredParks) { park in
                     NavigationLink(value: park) {
                         ParkRowView(park: park)
                             .listRowSeparator(.hidden)
                     }
                     .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
                 }
             }
         }
@@ -126,6 +144,38 @@ struct ParksView: View {
 }
 
 private extension ParksView {
+    private enum ParksViewLayout {
+        static let ratingColumnWidth: CGFloat = 104
+    }
+
+    var tableHeader: some View {
+        HStack {
+            Text("Park")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text("Family")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+                .frame(width: ParksViewLayout.ratingColumnWidth, alignment: .trailing)
+
+            Text("Community")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+                .frame(width: ParksViewLayout.ratingColumnWidth, alignment: .trailing)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 0, trailing: 0))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+    }
+
     var loadingView: some View {
         HStack {
             Spacer()
@@ -173,7 +223,7 @@ private struct ParkRowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top) {
+            HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(park.name)
                         .font(.headline)
@@ -183,46 +233,87 @@ private struct ParkRowView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                Spacer()
-                ratingBadge
+
+                Spacer(minLength: 16)
+
+                ratingColumn(title: "Family", icon: "star.fill", value: park.familyRating, accent: Color(red: 0.36, green: 0.31, blue: 0.55))
+
+                ratingColumn(title: "Community", icon: "person.3.fill", value: park.communityRating, accent: Color(red: 0.42, green: 0.37, blue: 0.67))
             }
 
             memberships
+
+            if let summary = reviewSummary {
+                Text(summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.white.opacity(0.92))
-                .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.94))
+                .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 3)
         )
     }
 
-    private var ratingBadge: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "star.fill")
-            Text(String(format: "%.1f", park.rating))
-                .fontWeight(.semibold)
+    private func ratingColumn(title: String, icon: String, value: Double?, accent: Color) -> some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                if let value {
+                    Text(String(format: "%.1f", value))
+                        .fontWeight(.semibold)
+                        .monospacedDigit()
+                } else {
+                    Text("—")
+                        .fontWeight(.semibold)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(accent.opacity(0.12), in: Capsule())
+            .foregroundStyle(accent)
         }
-        .font(.footnote)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color(red: 0.98, green: 0.88, blue: 0.63), in: Capsule())
-        .foregroundStyle(Color(red: 0.36, green: 0.31, blue: 0.55))
+        .frame(width: ParksViewLayout.ratingColumnWidth, alignment: .trailing)
     }
 
     private var memberships: some View {
-        HStack(spacing: 8) {
-            ForEach(park.memberships, id: \.self) { membership in
-                Text(membership.rawValue)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(membership.badgeColor.opacity(0.16), in: Capsule())
-                    .foregroundStyle(membership.badgeColor)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(park.memberships, id: \.self) { membership in
+                    Text(membership.rawValue)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(membership.badgeColor.opacity(0.16), in: Capsule())
+                        .foregroundStyle(membership.badgeColor)
+                }
             }
-            Spacer(minLength: 0)
+            .padding(.vertical, 2)
+        }
+    }
+
+    private var reviewSummary: String? {
+        let family = park.familyReviewCount
+        let community = park.communityReviewCount
+
+        switch (family, community) {
+        case (0, 0):
+            return nil
+        case (_, 0):
+            return "\(family) family comments"
+        case (0, _):
+            return "\(community) community comments"
+        default:
+            return "\(family) family · \(community) community comments"
         }
     }
 }
