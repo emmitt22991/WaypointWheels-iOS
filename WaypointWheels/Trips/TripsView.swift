@@ -49,17 +49,6 @@ struct TripsView: View {
                     }
                 }
             }
-
-            if let payload = viewModel.debugPayloadCache,
-               !viewModel.isLoading,
-               viewModel.errorMessage == nil {
-                Section {
-                    debugPayloadView(payload: payload, includeDivider: false)
-                        .listRowInsets(.init(top: 12, leading: 16, bottom: 12, trailing: 16))
-                }
-                .textCase(nil)
-                .listRowBackground(Color.clear)
-            }
         }
         .listStyle(.plain)
         .background(
@@ -157,10 +146,6 @@ struct TripsView: View {
                     .fontWeight(.semibold)
             }
             .buttonStyle(.borderedProminent)
-
-            if let payload = viewModel.debugPayloadCache {
-                debugPayloadView(payload: payload)
-            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
@@ -181,34 +166,6 @@ struct TripsView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
-    }
-}
-
-private extension TripsView {
-    func debugPayloadView(payload: String, includeDivider: Bool = true) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if includeDivider {
-                Divider()
-                    .padding(.vertical, 4)
-            }
-
-            Text("Response Payload")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
-
-            ScrollView {
-                Text(payload)
-                    .font(.system(.footnote, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-            }
-            .frame(maxHeight: 180)
-            .background(Color(uiColor: .secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -260,16 +217,18 @@ private struct TimelineRow: View {
                         .foregroundStyle(.secondary)
                 }
 
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(leg.highlights, id: \.self) { highlight in
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.caption)
-                                .foregroundStyle(Color(red: 0.32, green: 0.29, blue: 0.55))
-                                .padding(.top, 2)
-                            Text(highlight)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                if !leg.highlights.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(leg.highlights, id: \.self) { highlight in
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(Color(red: 0.32, green: 0.29, blue: 0.55))
+                                    .padding(.top, 2)
+                                Text(highlight)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }

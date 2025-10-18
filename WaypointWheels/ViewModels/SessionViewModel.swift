@@ -44,6 +44,7 @@ final class SessionViewModel: ObservableObject {
     private enum DefaultsKeys {
         static let email = "com.stepstonetexas.waypointwheels.email"
         static let name = "com.stepstonetexas.waypointwheels.name"
+        static let hasBiometricEnabled = "com.stepstonetexas.waypointwheels.biometric"
     }
 
     init(apiClient: APIClient = APIClient(),
@@ -98,6 +99,9 @@ final class SessionViewModel: ObservableObject {
             persist(userName: response.value.user.name, email: sanitizedEmail)
             updateBiometricAvailability()
             isAuthenticated = true
+            
+            // Enable biometric login by default after first successful login
+            userDefaults.set(true, forKey: DefaultsKeys.hasBiometricEnabled)
         } catch {
             errorMessage = error.userFacingMessage
         }
@@ -120,15 +124,28 @@ final class SessionViewModel: ObservableObject {
                 return
             }
 
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-
-                do {
-                    _ = try await self.tripsService.fetchCurrentItinerary()
-                    self.updateBiometricAvailability()
-                    self.activateStoredSession()
-                } catch {
-                    self.handleStoredSessionValidationError(error)
+            updateBiometricAvailability()
+            
+            // Check if biometric login is enabled and device supports it
+            let hasBiometricEnabled = userDefaults.bool(forKey: DefaultsKeys.hasBiometricEnabled)
+            
+            if hasBiometricEnabled && canUseBiometricLogin {
+                // Automatically authenticate with biometrics on app launch
+                Task { @MainActor [weak self] in
+                    await self?.performBiometricAuthentication(isAutomatic: true)
+                }
+            } else {
+                // Validate token in background but show login screen
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    
+                    do {
+                        _ = try await self.tripsService.fetchCurrentItinerary()
+                        // Token is valid but biometric not enabled - still show login
+                        self.restorePersistedProfile()
+                    } catch {
+                        self.handleStoredSessionValidationError(error)
+                    }
                 }
             }
         } catch {
@@ -139,15 +156,14 @@ final class SessionViewModel: ObservableObject {
     }
 
     private func handleStoredSessionValidationError(_ error: Error) {
-        canUseBiometricLogin = false
-        biometricType = .none
-
         if let tripsError = error as? TripsService.TripsError,
            tripsError.isAuthenticationFailure {
             signOut()
             errorMessage = "Session expired—please sign in again"
         } else {
-            errorMessage = error.userFacingMessage
+            // Token validation failed but might be network issue
+            // Don't force sign out immediately
+            errorMessage = nil
         }
     }
 
@@ -229,17 +245,29 @@ final class SessionViewModel: ObservableObject {
         do {
             let success = try await context.evaluatePolicy(policy, localizedReason: "Authenticate to access Waypoint Wheels.")
             if success {
-                completeBiometricLogin()
+                // Validate token before completing login
+                do {
+                    _ = try await self.tripsService.fetchCurrentItinerary()
+                    completeBiometricLogin()
+                } catch {
+                    handleStoredSessionValidationError(error)
+                    if !isAutomatic {
+                        errorMessage = "Session expired—please sign in again"
+                    }
+                }
             } else if !isAutomatic {
                 errorMessage = "Authentication failed."
             }
         } catch {
             if isAutomatic, let laError = error as? LAError,
                [.userCancel, .systemCancel, .appCancel].contains(laError.code) {
+                // User cancelled automatic biometric - that's fine, stay on login screen
                 return
             }
 
-            errorMessage = error.userFacingMessage
+            if !isAutomatic {
+                errorMessage = error.userFacingMessage
+            }
         }
     }
 
@@ -262,6 +290,7 @@ final class SessionViewModel: ObservableObject {
         try? keychainStore.removeToken()
         userDefaults.removeObject(forKey: DefaultsKeys.name)
         userDefaults.removeObject(forKey: DefaultsKeys.email)
+        userDefaults.removeObject(forKey: DefaultsKeys.hasBiometricEnabled)
     }
 }
 

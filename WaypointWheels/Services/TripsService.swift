@@ -123,9 +123,10 @@ final class TripsService {
             case trip
             case itinerary
             case data
+            case timeline
             case currentTrip = "current_trip"
 
-            static let nestedContainers: [CodingKeys] = [.trip, .itinerary, .currentTrip, .data]
+            static let nestedContainers: [CodingKeys] = [.trip, .itinerary, .currentTrip, .data, .timeline]
         }
 
         private struct AnyCodingKey: CodingKey {
@@ -153,23 +154,27 @@ final class TripsService {
     func fetchCurrentItineraryResult() async throws -> ItineraryResult {
         do {
             // Debug: Print the full URL being requested
-            print("🔍 Fetching current trip from API...")
-            print("📍 Attempting path: trips/current/")
+            print("🔍 Fetching trip itinerary from API...")
+            print("📍 Attempting path: trips/itinerary")
             
             // Build the URL to see what we're actually calling
             do {
-                let testURL = try apiClient.url(for: "trips/current/")
+                let testURL = try apiClient.url(for: "trips/itinerary")
                 print("📍 Full URL will be: \(testURL.absoluteString)")
             } catch {
                 print("❌ Error building URL: \(error)")
             }
             
-            // Path: trips/current/ (base URL already includes /api)
-            let response: APIClient.APIResponse<Data> = try await apiClient.request(path: "trips/current/", method: "GET")
+            // Use the itinerary endpoint which converts timeline to legs format
+            let response: APIClient.APIResponse<Data> = try await apiClient.request(path: "trips/itinerary.php", method: "GET")
             
             // Debug: Print response status
             print("✅ API Response received")
-            print("📄 Raw response: \(response.rawString ?? "nil")")
+            if let rawString = response.rawString {
+                print("📄 Raw response: \(rawString)")
+            } else {
+                print("📄 Raw response: (empty or binary)")
+            }
             
             do {
                 let itinerary = try apiClient.decode(ItineraryResponse.self, from: response.value)
@@ -214,7 +219,9 @@ final class TripsService {
                         rawBody: rawString
                     )
                 }
-                print("❌ Failed to decode response")
+                
+                print("❌ Failed to decode JSON response")
+                print("📄 Response preview: \(response.rawString?.prefix(500) ?? "nil")")
                 throw TripsError.invalidResponse(rawBody: response.rawString)
             }
         } catch let error as TripsError {
