@@ -7,8 +7,13 @@ final class ChecklistsViewModel: ObservableObject {
     @Published var isLoading: Bool
     @Published var errorMessage: String?
     @Published private(set) var validationErrors: [Checklist.ID: ValidationState]
+    @Published private(set) var dailyChecklists: [ChecklistRun]
+    @Published private(set) var dailyTargetDate: Date?
+    @Published private(set) var dailyRelativeDay: Checklist.RelativeDay?
+    @Published private(set) var dailyErrorMessage: String?
 
     private let service: ChecklistsService
+    private var isUpdatingDailyItem: Bool
 
     init(checklists: [Checklist] = [],
          householdMembers: [HouseholdMember] = [],
@@ -20,6 +25,11 @@ final class ChecklistsViewModel: ObservableObject {
         self.isLoading = false
         self.errorMessage = nil
         self.validationErrors = [:]
+        self.dailyChecklists = []
+        self.dailyTargetDate = nil
+        self.dailyRelativeDay = nil
+        self.dailyErrorMessage = nil
+        self.isUpdatingDailyItem = false
 
         if autoLoad {
             Task { [weak self] in
@@ -33,15 +43,10 @@ final class ChecklistsViewModel: ObservableObject {
 
         isLoading = true
         errorMessage = nil
+        dailyErrorMessage = nil
 
-        do {
-            let checklists = try await service.fetchChecklists()
-            let members = try await service.fetchHouseholdMembers()
-            self.checklists = checklists.map(sanitizedChecklist(_:))
-            self.householdMembers = members.sorted(by: { $0.name < $1.name })
-        } catch {
-            errorMessage = error.userFacingMessage
-        }
+        await loadLibraryData()
+        await loadDailyAssignments()
 
         isLoading = false
     }
@@ -51,7 +56,8 @@ final class ChecklistsViewModel: ObservableObject {
         let placeholder = Checklist(title: "New Checklist",
                                     description: "",
                                     items: [],
-                                    assignedMembers: [])
+                                    assignedMembers: [],
+                                    relativeDay: .dayBefore)
         checklists.insert(placeholder, at: 0)
 
         do {
@@ -108,7 +114,8 @@ final class ChecklistsViewModel: ObservableObject {
         let duplicate = Checklist(title: source.title + " Copy",
                                   description: source.description,
                                   items: duplicatedItems,
-                                  assignedMembers: source.assignedMembers)
+                                  assignedMembers: source.assignedMembers,
+                                  relativeDay: source.relativeDay)
         let preparedDuplicate = sanitizedChecklist(duplicate)
 
         checklists.insert(preparedDuplicate, at: min(index + 1, checklists.count))
@@ -202,6 +209,22 @@ final class ChecklistsViewModel: ObservableObject {
         Task { await persistChecklist(checklist) }
     }
 
+    func toggleDailyItem(runID: ChecklistRun.ID, itemID: Checklist.Item.ID) {
+        guard let runIndex = dailyChecklists.firstIndex(where: { $0.id == runID }) else { return }
+        guard let itemIndex = dailyChecklists[runIndex].checklist.items.firstIndex(where: { $0.id == itemID }) else { return }
+
+        dailyChecklists[runIndex].checklist.items[itemIndex].isComplete.toggle()
+        let isComplete = dailyChecklists[runIndex].checklist.items[itemIndex].isComplete
+        let targetDate = dailyChecklists[runIndex].targetDate
+        let checklistID = dailyChecklists[runIndex].checklist.id
+
+        Task { await updateDailyItem(checklistID: checklistID,
+                                     itemID: itemID,
+                                     targetDate: targetDate,
+                                     isComplete: isComplete,
+                                     optimisticRunIndex: runIndex) }
+    }
+
     func validationMessage(for checklistID: Checklist.ID, field: ValidationField) -> String? {
         validationErrors[checklistID]?.message(for: field)
     }
@@ -237,6 +260,44 @@ extension ChecklistsViewModel {
 }
 
 private extension ChecklistsViewModel {
+    func loadLibraryData() async {
+        do {
+            async let checklistsTask = service.fetchChecklists()
+            async let membersTask = service.fetchHouseholdMembers()
+
+            let checklists = try await checklistsTask
+            let members = try await membersTask
+
+            await MainActor.run {
+                self.checklists = checklists.map(sanitizedChecklist(_:))
+                self.householdMembers = members.sorted(by: { $0.name < $1.name })
+            }
+        } catch {
+            await MainActor.run {
+                self.errorMessage = error.userFacingMessage
+            }
+        }
+    }
+
+    func loadDailyAssignments(for date: Date = Date()) async {
+        do {
+            let response = try await service.fetchDailyAssignments(for: date)
+            await MainActor.run {
+                dailyTargetDate = response.targetDate
+                dailyRelativeDay = response.relativeDayContext
+                dailyChecklists = response.checklists.map(sanitizedRun(_:))
+                dailyErrorMessage = nil
+            }
+        } catch {
+            await MainActor.run {
+                dailyChecklists = []
+                dailyTargetDate = nil
+                dailyRelativeDay = nil
+                dailyErrorMessage = error.userFacingMessage
+            }
+        }
+    }
+
     func persistChecklist(_ checklist: Checklist) async {
         do {
             let draft = ChecklistsService.ChecklistDraft(checklist: checklist)
@@ -270,6 +331,59 @@ private extension ChecklistsViewModel {
     func normalizeItems(in checklist: inout Checklist) {
         for index in checklist.items.indices {
             checklist.items[index].position = index
+        }
+    }
+
+    func sanitizedChecklist(_ checklist: Checklist) -> Checklist {
+        var sanitized = checklist
+        sanitized.items.sort(by: { $0.position < $1.position })
+        sanitized.assignedMembers.sort(by: { $0.name < $1.name })
+        normalizeItems(in: &sanitized)
+        return sanitized
+    }
+
+    func sanitizedRun(_ run: ChecklistRun) -> ChecklistRun {
+        var sanitized = run
+        sanitized.checklist = sanitizedChecklist(run.checklist)
+        return sanitized
+    }
+
+    func updateDailyItem(checklistID: Checklist.ID,
+                         itemID: Checklist.Item.ID,
+                         targetDate: Date,
+                         isComplete: Bool,
+                         optimisticRunIndex: Int) async {
+        if isUpdatingDailyItem { return }
+        isUpdatingDailyItem = true
+
+        do {
+            let updatedRun = try await service.setItemCompletion(checklistID: checklistID,
+                                                                 itemID: itemID,
+                                                                 targetDate: targetDate,
+                                                                 isComplete: isComplete)
+            await MainActor.run {
+                replaceDailyRun(updatedRun)
+                dailyErrorMessage = nil
+            }
+        } catch {
+            await MainActor.run {
+                if dailyChecklists.indices.contains(optimisticRunIndex),
+                   let itemIndex = dailyChecklists[optimisticRunIndex].checklist.items.firstIndex(where: { $0.id == itemID }) {
+                    dailyChecklists[optimisticRunIndex].checklist.items[itemIndex].isComplete.toggle()
+                }
+                dailyErrorMessage = error.userFacingMessage
+            }
+        }
+
+        isUpdatingDailyItem = false
+    }
+
+    func replaceDailyRun(_ run: ChecklistRun) {
+        let sanitized = sanitizedRun(run)
+        if let index = dailyChecklists.firstIndex(where: { $0.id == run.id }) {
+            dailyChecklists[index] = sanitized
+        } else {
+            dailyChecklists.append(sanitized)
         }
     }
 
@@ -307,13 +421,5 @@ private extension ChecklistsViewModel {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "Something went wrong. Please try again." }
         return trimmed
-    }
-
-    func sanitizedChecklist(_ checklist: Checklist) -> Checklist {
-        var sanitized = checklist
-        sanitized.items.sort(by: { $0.position < $1.position })
-        sanitized.assignedMembers.sort(by: { $0.name < $1.name })
-        normalizeItems(in: &sanitized)
-        return sanitized
     }
 }

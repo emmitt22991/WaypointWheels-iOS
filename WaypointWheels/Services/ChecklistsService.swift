@@ -76,6 +76,32 @@ final class ChecklistsService {
             throw ServiceError(apiError: error)
         }
     }
+
+    func fetchDailyAssignments(for date: Date = Date()) async throws -> DailyAssignmentsResponse {
+        let dateString = ChecklistsService.dateFormatter.string(from: date)
+        do {
+            let response: DailyAssignmentsResponse = try await apiClient.request(path: "households/current/checklists/daily/\(dateString)")
+            return response
+        } catch let error as APIClient.APIError {
+            throw ServiceError(apiError: error)
+        }
+    }
+
+    func setItemCompletion(checklistID: Checklist.ID,
+                           itemID: Checklist.Item.ID,
+                           targetDate: Date,
+                           isComplete: Bool) async throws -> ChecklistRun {
+        let payload = ChecklistItemCompletionRequest(targetDate: ChecklistsService.dateFormatter.string(from: targetDate),
+                                                     isComplete: isComplete)
+        do {
+            let response: ChecklistRunResponse = try await apiClient.request(path: "households/current/checklists/\(checklistID.uuidString)/items/\(itemID.uuidString)/completion",
+                                                                             method: "POST",
+                                                                             body: payload)
+            return response.checklist
+        } catch let error as APIClient.APIError {
+            throw ServiceError(apiError: error)
+        }
+    }
 }
 
 extension ChecklistsService {
@@ -84,12 +110,14 @@ extension ChecklistsService {
         let description: String
         let items: [ChecklistItemPayload]
         let assignedMemberIDs: [UUID]
+        let relativeDay: Checklist.RelativeDay
 
         enum CodingKeys: String, CodingKey {
             case title
             case description
             case items
             case assignedMemberIDs = "assigned_member_ids"
+            case relativeDay = "relative_day"
         }
     }
 
@@ -119,6 +147,45 @@ extension ChecklistsService {
 
     struct HouseholdMembersResponse: Decodable {
         let members: [HouseholdMember]
+    }
+
+    struct DailyAssignmentsResponse: Decodable {
+        let targetDate: Date
+        let relativeDayContext: Checklist.RelativeDay?
+        let checklists: [ChecklistRun]
+
+        enum CodingKeys: String, CodingKey {
+            case targetDate = "target_date"
+            case relativeDayContext = "relative_day_context"
+            case checklists
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let dateString = try container.decode(String.self, forKey: .targetDate)
+            guard let date = ChecklistsService.dateFormatter.date(from: dateString) else {
+                throw DecodingError.dataCorruptedError(forKey: .targetDate,
+                                                       in: container,
+                                                       debugDescription: "Unable to decode target date \(dateString)")
+            }
+            targetDate = date
+            relativeDayContext = try container.decodeIfPresent(Checklist.RelativeDay.self, forKey: .relativeDayContext)
+            checklists = try container.decodeIfPresent([ChecklistRun].self, forKey: .checklists) ?? []
+        }
+    }
+
+    struct ChecklistRunResponse: Decodable {
+        let checklist: ChecklistRun
+    }
+
+    struct ChecklistItemCompletionRequest: Encodable {
+        let targetDate: String
+        let isComplete: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case targetDate = "target_date"
+            case isComplete = "is_complete"
+        }
     }
 
     struct EmptyResponse: Decodable, EmptyDecodable {}
@@ -156,5 +223,16 @@ extension ChecklistsService.ChecklistDraft {
                                                        position: index)
             }
         self.assignedMemberIDs = checklist.assignedMembers.map(\.id)
+        self.relativeDay = checklist.relativeDay
     }
+}
+
+private extension ChecklistsService {
+    static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
 }

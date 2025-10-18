@@ -7,7 +7,6 @@ struct DashboardView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var checklistsViewModel = ChecklistsViewModel()
     @StateObject private var tripsViewModel = TripsViewModel()
-    @State private var showingChecklists = false
 
     private let accentGradient = LinearGradient(colors: [
         Color(red: 0.98, green: 0.88, blue: 0.63),
@@ -80,9 +79,6 @@ struct DashboardView: View {
 
                 bottomNavigation
             }
-        }
-        .sheet(isPresented: $showingChecklists) {
-            ChecklistsView(viewModel: checklistsViewModel)
         }
         .task {
             await tripsViewModel.loadItinerary()
@@ -183,7 +179,9 @@ struct DashboardView: View {
                                 .foregroundStyle(.secondary)
                         }
 
-                        Button(action: { showingChecklists = true }) {
+                        NavigationLink {
+                            ChecklistsView(viewModel: checklistsViewModel)
+                        } label: {
                             Label("Open Checklists", systemImage: "list.bullet.rectangle")
                                 .font(.footnote)
                                 .padding(.horizontal, 12)
@@ -501,9 +499,9 @@ struct DashboardView: View {
                 }
                 .buttonStyle(.plain)
 
-                Button(action: {
-                    showingChecklists = true
-                }) {
+                NavigationLink {
+                    ChecklistsView(viewModel: checklistsViewModel)
+                } label: {
                     bottomNavItem(label: "Checklists", systemImage: "checklist")
                 }
                 .buttonStyle(.plain)

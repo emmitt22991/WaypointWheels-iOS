@@ -38,22 +38,55 @@ struct Checklist: Identifiable, Hashable, Codable {
         }
     }
 
+    enum RelativeDay: String, CaseIterable, Codable, Identifiable {
+        case dayBefore = "day_before"
+        case dayOf = "day_of"
+        case dayAfter = "day_after"
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .dayBefore:
+                return "Day Before Travel"
+            case .dayOf:
+                return "Travel Day"
+            case .dayAfter:
+                return "Day After Arrival"
+            }
+        }
+
+        var conciseLabel: String {
+            switch self {
+            case .dayBefore:
+                return "Day Before"
+            case .dayOf:
+                return "Day Of"
+            case .dayAfter:
+                return "Day After"
+            }
+        }
+    }
+
     let id: UUID
     var title: String
     var description: String
     var items: [Item]
     var assignedMembers: [HouseholdMember]
+    var relativeDay: RelativeDay
 
     init(id: UUID = UUID(),
          title: String,
          description: String = "",
          items: [Item] = [],
-         assignedMembers: [HouseholdMember] = []) {
+         assignedMembers: [HouseholdMember] = [],
+         relativeDay: RelativeDay = .dayBefore) {
         self.id = id
         self.title = title
         self.description = description
         self.items = items
         self.assignedMembers = assignedMembers
+        self.relativeDay = relativeDay
     }
 
     enum CodingKeys: String, CodingKey {
@@ -62,6 +95,7 @@ struct Checklist: Identifiable, Hashable, Codable {
         case description
         case items
         case assignedMembers = "assigned_members"
+        case relativeDay = "relative_day"
     }
 
     init(from decoder: Decoder) throws {
@@ -71,6 +105,7 @@ struct Checklist: Identifiable, Hashable, Codable {
         description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
         items = try container.decodeIfPresent([Item].self, forKey: .items) ?? []
         assignedMembers = try container.decodeIfPresent([HouseholdMember].self, forKey: .assignedMembers) ?? []
+        relativeDay = try container.decodeIfPresent(RelativeDay.self, forKey: .relativeDay) ?? .dayBefore
     }
 
     var completedItemCount: Int {
@@ -100,7 +135,8 @@ extension Checklist {
                 Item(title: "Secure loose cabinets", notes: "Double-check the galley.", position: 3),
                 Item(title: "Review travel route", notes: "Watch for construction near exit 316.", position: 4),
             ],
-            assignedMembers: Array(HouseholdMember.sampleMembers.prefix(2))
+            assignedMembers: Array(HouseholdMember.sampleMembers.prefix(2)),
+            relativeDay: .dayBefore
         ),
         Checklist(
             title: "Departure Morning",
@@ -111,7 +147,8 @@ extension Checklist {
                 Item(title: "Secure interior items", notes: "Latch drawers and doors.", position: 2),
                 Item(title: "Run light check", notes: "Brake, turn, and marker lights.", position: 3),
             ],
-            assignedMembers: [HouseholdMember.sampleMembers[2]]
+            assignedMembers: [HouseholdMember.sampleMembers[2]],
+            relativeDay: .dayOf
         ),
         Checklist(
             title: "Arrival Setup",
@@ -122,7 +159,8 @@ extension Checklist {
                 Item(title: "Deploy awning", isComplete: false, position: 2),
                 Item(title: "Extend slides", notes: "Make sure there's clearance.", position: 3),
             ],
-            assignedMembers: []
+            assignedMembers: [],
+            relativeDay: .dayAfter
         )
     ]
 }
