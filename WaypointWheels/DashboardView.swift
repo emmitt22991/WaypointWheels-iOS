@@ -119,7 +119,7 @@ struct DashboardView: View {
 
                     LazyVGrid(columns: heroTileColumns, alignment: .leading, spacing: 16) {
                         dashboardTile(title: "Current Location", value: "New Braunfels, TX", detail: "The crew is hunkered down in New Braunfels, TX waiting out the warm front.", icon: "mappin.and.ellipse")
-                        dashboardTile(title: "Next Travel Day", value: "Sunday · Oct 12", detail: "Wheels up soon! You're bound for \nTyson's RV Resort.", icon: "calendar")
+                        dashboardTile(title: "Next Travel Day", value: "Sunday · Oct 12", detail: "Wheels up soon! You're bound\nfor Tyson's RV Resort.", icon: "calendar")
                         dashboardTile(title: "Today", value: "63° & Clear Skies", detail: "Expect sunshine with highs near 70°. Winds from the west, 10-15 mph.", icon: "sun.max.fill")
                     }
                 }
