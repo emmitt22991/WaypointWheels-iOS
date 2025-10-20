@@ -37,6 +37,25 @@ final class ParksViewModel: ObservableObject {
         }
     }
 
+    enum SortOption: String, CaseIterable, Identifiable {
+        case familyRating
+        case communityRating
+        case name
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .familyRating:
+                return "Family rating"
+            case .communityRating:
+                return "Community rating"
+            case .name:
+                return "Name"
+            }
+        }
+    }
+
     @Published private(set) var parks: [Park]
     @Published private(set) var isLoading = false
     @Published private(set) var loadError: Error?
@@ -45,6 +64,7 @@ final class ParksViewModel: ObservableObject {
     @Published var showFamilyFavoritesOnly = false
     @Published var selectedState: String?
     @Published var searchText: String = ""
+    @Published var sortOption: SortOption = .familyRating
 
     private let parksService: ParksService
 
@@ -90,13 +110,7 @@ final class ParksViewModel: ObservableObject {
             .filter { matchesRatingFilter($0) }
             .filter { matchesStateFilter($0) }
             .filter { matchesSearch($0) }
-            .sorted { lhs, rhs in
-                if showFamilyFavoritesOnly {
-                    return lhs.rating == rhs.rating ? lhs.name < rhs.name : lhs.rating > rhs.rating
-                } else {
-                    return lhs.name < rhs.name
-                }
-            }
+            .sorted(by: sortComparator)
     }
 
     func makeDetailViewModel(for park: Park) -> ParkDetailViewModel {
@@ -141,5 +155,27 @@ final class ParksViewModel: ObservableObject {
         let needle = trimmed.lowercased()
         let haystacks = [park.name, park.city, park.state]
         return haystacks.contains { $0.lowercased().contains(needle) }
+    }
+
+    private func sortComparator(_ lhs: Park, _ rhs: Park) -> Bool {
+        switch sortOption {
+        case .familyRating:
+            if lhs.familyRating == rhs.familyRating {
+                return lhs.name.localizedCompare(rhs.name) == .orderedAscending
+            }
+            return lhs.familyRating > rhs.familyRating
+        case .communityRating:
+            let lhsCommunity = lhs.communityRating ?? -1
+            let rhsCommunity = rhs.communityRating ?? -1
+            if lhsCommunity == rhsCommunity {
+                if lhs.familyRating == rhs.familyRating {
+                    return lhs.name.localizedCompare(rhs.name) == .orderedAscending
+                }
+                return lhs.familyRating > rhs.familyRating
+            }
+            return lhsCommunity > rhsCommunity
+        case .name:
+            return lhs.name.localizedCompare(rhs.name) == .orderedAscending
+        }
     }
 }

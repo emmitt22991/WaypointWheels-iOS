@@ -59,7 +59,10 @@ struct Park: Identifiable, Hashable, Decodable {
     let name: String
     let state: String
     let city: String
-    let rating: Double
+    let familyRating: Double
+    let communityRating: Double?
+    let familyReviewCount: Int
+    let communityReviewCount: Int
     let description: String
     let memberships: [Membership]
     let amenities: [Amenity]
@@ -69,7 +72,10 @@ struct Park: Identifiable, Hashable, Decodable {
          name: String,
          state: String,
          city: String,
-         rating: Double,
+         familyRating: Double,
+         communityRating: Double? = nil,
+         familyReviewCount: Int = 0,
+         communityReviewCount: Int = 0,
          description: String,
          memberships: [Membership],
          amenities: [Amenity],
@@ -78,7 +84,10 @@ struct Park: Identifiable, Hashable, Decodable {
         self.name = name
         self.state = state
         self.city = city
-        self.rating = rating
+        self.familyRating = familyRating
+        self.communityRating = communityRating
+        self.familyReviewCount = familyReviewCount
+        self.communityReviewCount = communityReviewCount
         self.description = description
         self.memberships = memberships
         self.amenities = amenities
@@ -89,16 +98,41 @@ struct Park: Identifiable, Hashable, Decodable {
         "\(city), \(state)"
     }
 
+    var rating: Double { familyRating }
+
     private enum CodingKeys: String, CodingKey {
         case id
         case name
         case state
         case city
         case rating
+        case familyRating = "family_rating"
+        case communityRating = "community_rating"
+        case familyReviewCount = "family_review_count"
+        case communityReviewCount = "community_review_count"
         case description
         case memberships
         case amenities
         case featuredNotes = "featured_notes"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        state = try container.decode(String.self, forKey: .state)
+        city = try container.decode(String.self, forKey: .city)
+
+        let legacyRating = try container.decodeIfPresent(Double.self, forKey: .rating)
+        familyRating = try container.decodeIfPresent(Double.self, forKey: .familyRating) ?? legacyRating ?? 0
+        communityRating = try container.decodeIfPresent(Double.self, forKey: .communityRating)
+        familyReviewCount = try container.decodeIfPresent(Int.self, forKey: .familyReviewCount) ?? 0
+        communityReviewCount = try container.decodeIfPresent(Int.self, forKey: .communityReviewCount) ?? 0
+
+        description = try container.decode(String.self, forKey: .description)
+        memberships = try container.decode([Membership].self, forKey: .memberships)
+        amenities = try container.decode([Amenity].self, forKey: .amenities)
+        featuredNotes = try container.decode([String].self, forKey: .featuredNotes)
     }
 
     static let sampleData: [Park] = [
@@ -106,7 +140,10 @@ struct Park: Identifiable, Hashable, Decodable {
             name: "Riverbend Retreat",
             state: "TX",
             city: "New Braunfels",
-            rating: 4.6,
+            familyRating: 4.6,
+            communityRating: 4.4,
+            familyReviewCount: 12,
+            communityReviewCount: 64,
             description: "Nestled right along the Guadalupe River, Riverbend Retreat offers oversized pull-through sites, shade from towering pecan trees, and quick access to tubing outfitters.",
             memberships: [.thousandTrails, .harvestHosts],
             amenities: [
@@ -124,7 +161,10 @@ struct Park: Identifiable, Hashable, Decodable {
             name: "Juniper Ridge Camp",
             state: "UT",
             city: "Moab",
-            rating: 4.2,
+            familyRating: 4.2,
+            communityRating: 4.0,
+            familyReviewCount: 9,
+            communityReviewCount: 38,
             description: "Wake up to red rock views and be minutes away from both Arches and Canyonlands National Parks. Juniper Ridge balances rustic desert vibes with modern amenities.",
             memberships: [.koa, .passportAmerica],
             amenities: [
@@ -141,7 +181,10 @@ struct Park: Identifiable, Hashable, Decodable {
             name: "Evergreen Lakeside",
             state: "WA",
             city: "Leavenworth",
-            rating: 3.8,
+            familyRating: 3.8,
+            communityRating: 3.9,
+            familyReviewCount: 7,
+            communityReviewCount: 22,
             description: "A pine-canopied hideaway with waterfront sites on Icicle Creek. This stop is perfect for quiet mornings, paddle boarding, and quick trips into Bavarian downtown.",
             memberships: [.thousandTrails, .independent],
             amenities: [
@@ -158,7 +201,10 @@ struct Park: Identifiable, Hashable, Decodable {
             name: "Sunset Mesa RV Resort",
             state: "AZ",
             city: "Sedona",
-            rating: 4.8,
+            familyRating: 4.8,
+            communityRating: 4.6,
+            familyReviewCount: 16,
+            communityReviewCount: 71,
             description: "Perched above the red rocks, Sunset Mesa delivers panoramic sunsets, curated wellness programming, and easy day trips into uptown Sedona.",
             memberships: [.harvestHosts, .independent],
             amenities: [

@@ -29,7 +29,7 @@ struct ParkDetailView: View {
             }
 
             if let detail = viewModel.detail {
-                if !detail.photos.isEmpty {
+                if !detail.orderedPhotos.isEmpty {
                     photosSection(detail)
                 }
 
@@ -41,7 +41,7 @@ struct ParkDetailView: View {
                     notesSection(detail)
                 }
 
-                reviewsSection(detail)
+                commentsSection(detail)
                 ratingFormSection
                 reviewFormSection
                 photoUploadSection
@@ -102,22 +102,70 @@ struct ParkDetailView: View {
     }
 
     private var ratingBadge: some View {
-        VStack(alignment: .trailing, spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: "star.fill")
-                Text(String(format: "%.1f / 5", viewModel.summary.rating))
-                    .fontWeight(.semibold)
+        VStack(alignment: .trailing, spacing: 10) {
+            HStack(spacing: 8) {
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("Family rating")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Image(systemName: "star.fill")
+                        Text(String(format: "%.1f", viewModel.summary.familyRating))
+                            .fontWeight(.semibold)
+                            .monospacedDigit()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(red: 0.98, green: 0.88, blue: 0.63), in: Capsule())
+                    .foregroundStyle(Color(red: 0.36, green: 0.31, blue: 0.55))
+                }
+
+                if let community = viewModel.summary.communityRating {
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("Community")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        HStack(spacing: 6) {
+                            Image(systemName: "person.3.fill")
+                            Text(String(format: "%.1f", community))
+                                .fontWeight(.semibold)
+                                .monospacedDigit()
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color(red: 0.94, green: 0.90, blue: 0.99), in: Capsule())
+                        .foregroundStyle(Color(red: 0.42, green: 0.37, blue: 0.67))
+                    }
+                }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color(red: 0.98, green: 0.88, blue: 0.63), in: Capsule())
-            .foregroundStyle(Color(red: 0.36, green: 0.31, blue: 0.55))
+
+            if let summaryText = ratingSummaryText {
+                Text(summaryText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             if let userRating = viewModel.userRating {
                 Text("Your rating: \(String(format: "%.1f", userRating))")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private var ratingSummaryText: String? {
+        let familyCount = viewModel.summary.familyReviewCount
+        let communityCount = viewModel.summary.communityReviewCount
+
+        switch (familyCount, communityCount) {
+        case (0, 0):
+            return nil
+        case (_, 0):
+            return "\(familyCount) family comments"
+        case (0, _):
+            return "\(communityCount) community comments"
+        default:
+            return "\(familyCount) family · \(communityCount) community comments"
         }
     }
 
@@ -169,55 +217,98 @@ struct ParkDetailView: View {
 
     private func photosSection(_ detail: ParkDetail) -> some View {
         Section("Gallery") {
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 16) {
-                    ForEach(detail.photos) { photo in
-                        VStack(alignment: .leading, spacing: 8) {
-                            AsyncImage(url: photo.imageURL) { phase in
-                                switch phase {
-                                case .empty:
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                            .fill(Color(.systemGray6))
-                                        ProgressView()
-                                    }
-                                case .success(let image):
-                                    image
-                                        .resizable()
-                                        .scaledToFill()
-                                case .failure:
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                            .fill(Color(.systemGray5))
-                                        Image(systemName: "photo")
-                                            .font(.title)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                @unknown default:
-                                    EmptyView()
-                                }
-                            }
-                            .frame(width: 220, height: 140)
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-
-                            if let caption = photo.caption, !caption.isEmpty {
-                                Text(caption)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            if let author = photo.uploadedBy, !author.isEmpty {
-                                Text("by \(author)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                    }
+            VStack(alignment: .leading, spacing: 20) {
+                if !detail.familyPhotos.isEmpty {
+                    photoCarousel(title: "Your crew", icon: "person.2.fill", photos: detail.familyPhotos, highlightColor: Color(red: 0.36, green: 0.31, blue: 0.55))
                 }
-                .padding(.vertical, 4)
+
+                if !detail.communityPhotos.isEmpty {
+                    photoCarousel(title: "Community", icon: "person.3", photos: detail.communityPhotos, highlightColor: Color(red: 0.42, green: 0.37, blue: 0.67).opacity(0.85))
+                }
             }
+            .padding(.vertical, 4)
         }
         .listRowBackground(Color.clear)
+    }
+
+    private func photoCarousel(title: String, icon: String, photos: [ParkDetail.Photo], highlightColor: Color) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(title, systemImage: icon)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(highlightColor)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 16) {
+                    ForEach(photos) { photo in
+                        photoCard(for: photo, accent: highlightColor)
+                    }
+                }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    private func photoCard(for photo: ParkDetail.Photo, accent: Color) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            AsyncImage(url: photo.imageURL) { phase in
+                switch phase {
+                case .empty:
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color(.systemGray6))
+                        ProgressView()
+                    }
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                case .failure:
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color(.systemGray5))
+                        Image(systemName: "photo")
+                            .font(.title)
+                            .foregroundStyle(.secondary)
+                    }
+                @unknown default:
+                    EmptyView()
+                }
+            }
+            .frame(width: 220, height: 140)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(alignment: .topLeading) {
+                if photo.isFamilyPhoto {
+                    Text("Your family")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(accent.opacity(0.9), in: Capsule())
+                        .foregroundStyle(Color.white)
+                        .padding(10)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if let uploader = photo.uploadedBy, !uploader.isEmpty {
+                    Text(uploader)
+                        .font(.caption2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(8)
+                }
+            }
+
+            if let caption = photo.caption, !caption.isEmpty {
+                Text(caption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .frame(width: 220, alignment: .leading)
     }
 
     private func amenitiesSection(_ detail: ParkDetail) -> some View {
@@ -261,41 +352,89 @@ struct ParkDetailView: View {
         .listRowBackground(Color.clear)
     }
 
-    private func reviewsSection(_ detail: ParkDetail) -> some View {
-        Section("Recent Reviews") {
-            if detail.reviews.isEmpty {
-                Text("No reviews yet. Be the first to share your stay!")
+    private func commentsSection(_ detail: ParkDetail) -> some View {
+        Section("Comments & Reviews") {
+            if detail.familyReviews.isEmpty && detail.communityReviews.isEmpty {
+                Text("No comments yet. Be the first to share your stay!")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                ForEach(detail.reviews) { review in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            HStack(spacing: 4) {
-                                Image(systemName: "star.fill")
-                                Text(String(format: "%.1f", review.rating))
-                                    .fontWeight(.semibold)
-                            }
-                            .foregroundStyle(Color(red: 0.36, green: 0.31, blue: 0.55))
-
-                            Spacer()
-
-                            Text(review.formattedDate)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Text(review.comment)
-                            .font(.body)
-                        Text("— \(review.authorName)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 20) {
+                    if !detail.familyReviews.isEmpty {
+                        reviewGroup(title: "Your family", icon: "heart.circle.fill", accent: Color(red: 0.36, green: 0.31, blue: 0.55), reviews: detail.familyReviews)
                     }
-                    .padding(.vertical, 6)
+
+                    if !detail.communityReviews.isEmpty {
+                        reviewGroup(title: "Community", icon: "person.3", accent: Color(red: 0.42, green: 0.37, blue: 0.67), reviews: detail.communityReviews)
+                    }
                 }
+                .padding(.vertical, 4)
             }
         }
         .listRowBackground(Color.clear)
+    }
+
+    private func reviewGroup(title: String, icon: String, accent: Color, reviews: [ParkDetail.Review]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(title, systemImage: icon)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(accent)
+
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(reviews) { review in
+                    reviewCard(review, accent: accent)
+                        .background(Color.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                }
+            }
+        }
+    }
+
+    private func reviewCard(_ review: ParkDetail.Review, accent: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center) {
+                HStack(spacing: 6) {
+                    Image(systemName: "star.fill")
+                    Text(String(format: "%.1f", review.rating))
+                        .fontWeight(.semibold)
+                        .monospacedDigit()
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(accent.opacity(0.15), in: Capsule())
+                .foregroundStyle(accent)
+
+                Spacer()
+
+                Text(review.formattedDate)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(review.comment)
+                .font(.body)
+
+            HStack {
+                Text("— \(review.authorName)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                if review.isFamilyReview {
+                    Label("Family", systemImage: "heart.fill")
+                        .font(.caption2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(accent.opacity(0.15), in: Capsule())
+                        .foregroundStyle(accent)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 
     private var ratingFormSection: some View {
@@ -471,10 +610,12 @@ struct ParkDetailView: View {
     let park = Park.sampleData[0]
     let detail = ParkDetail(
         summary: park,
-        photos: [],
+        familyPhotos: [],
+        communityPhotos: [],
         amenities: park.amenities,
         notes: park.featuredNotes,
-        reviews: [],
+        familyReviews: [],
+        communityReviews: [],
         userRating: 4.5,
         userReview: nil
     )

@@ -3,7 +3,6 @@ import SwiftUI
 @MainActor
 struct DashboardView: View {
     let userName: String
-    @State private var isShowingParks = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var checklistsViewModel = ChecklistsViewModel()
     @StateObject private var tripsViewModel = TripsViewModel()
@@ -413,9 +412,9 @@ struct DashboardView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                 Spacer()
-                Button(action: {
-                    isShowingParks = true
-                }) {
+                NavigationLink {
+                    ParksView()
+                } label: {
                     Label("Browse All Parks", systemImage: "leaf")
                         .font(.subheadline)
                         .padding(.horizontal, 16)
@@ -434,9 +433,6 @@ struct DashboardView: View {
                 }
                 .padding(.vertical, 4)
             }
-        }
-        .sheet(isPresented: $isShowingParks) {
-            ParksView()
         }
     }
 
@@ -487,9 +483,9 @@ struct DashboardView: View {
                 }
                 .buttonStyle(.plain)
 
-                Button(action: {
-                    isShowingParks = true
-                }) {
+                NavigationLink {
+                    ParksView()
+                } label: {
                     bottomNavItem(label: "Parks", systemImage: "leaf")
                 }
                 .buttonStyle(.plain)
