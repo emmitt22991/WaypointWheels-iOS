@@ -137,11 +137,11 @@ struct ParksView: View {
     }
 }
 
-private extension ParksView {
-    private enum ParksViewLayout {
-        static let ratingColumnWidth: CGFloat = 104
-    }
+private enum ParksViewLayout {
+    static let ratingColumnWidth: CGFloat = 104
+}
 
+private extension ParksView {
     var tableHeader: some View {
         HStack {
             Text("Park")
