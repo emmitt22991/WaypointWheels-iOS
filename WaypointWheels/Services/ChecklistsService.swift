@@ -94,7 +94,7 @@ final class ChecklistsService {
         let payload = ChecklistItemCompletionRequest(targetDate: ChecklistsService.dateFormatter.string(from: targetDate),
                                                      isComplete: isComplete)
         do {
-            let response: ChecklistRunResponse = try await apiClient.request(path: "households/checklist-item-completion.php/\(checklistID.uuidString)/\(itemID.uuidString)",
+            let response: ChecklistRunResponse = try await apiClient.request(path: "households/checklist-item-completion.php?checklist_id=\(checklistID.uuidString)&item_id=\(itemID.uuidString)",
                                                                              method: "POST",
                                                                              body: payload)
             return response.checklist

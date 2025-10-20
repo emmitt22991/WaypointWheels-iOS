@@ -30,255 +30,381 @@ struct ParksView: View {
         .searchable(text: $viewModel.searchText,
                     placement: .navigationBarDrawer(displayMode: .always),
                     prompt: Text("Search by name or city"))
-        .refreshable { await viewModel.loadParks(forceReload: true) }
-        .task { await viewModel.loadParks() }
+        .refreshable {
+            print("🔄 User triggered refresh")
+            await viewModel.loadParks(forceReload: true)
+        }
+        .task {
+            print("📱 ParksView appeared, loading parks")
+            await viewModel.loadParks()
+        }
     }
 
     private var filtersSection: some View {
-        Section("Filters") {
-            sortPicker
-            membershipPicker
-            Toggle(isOn: $viewModel.showFamilyFavoritesOnly.animation(.easeInOut)) {
-                Label("Show family favorites (4★+)", systemImage: "star.fill")
-                    .labelStyle(.titleAndIcon)
-            }
-            .toggleStyle(SwitchToggleStyle(tint: Color(red: 0.36, green: 0.31, blue: 0.55)))
-            statePicker
-        }
-        .listRowBackground(Color.clear)
-    }
-
-    private var sortPicker: some View {
-        HStack {
-            Label("Sort by", systemImage: "arrow.up.arrow.down")
-                .font(.subheadline)
-                .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
-            Spacer()
-            Picker("Sort by", selection: $viewModel.sortOption) {
-                ForEach(ParksViewModel.SortOption.allCases) { option in
-                    Text(option.displayName).tag(option)
-                }
-            }
-            .pickerStyle(.menu)
-        }
-    }
-
-    private var membershipPicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(viewModel.membershipFilters) { filter in
+        Section {
+            VStack(spacing: 14) {
+                // Row 1: Sort and Favorites
+                HStack(spacing: 12) {
+                    // Sort picker
+                    Menu {
+                        Picker("Sort by", selection: $viewModel.sortOption) {
+                            ForEach(ParksViewModel.SortOption.allCases) { option in
+                                Label(option.displayName, systemImage: option.icon)
+                                    .tag(option)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.up.arrow.down")
+                                .font(.subheadline)
+                            Text(viewModel.sortOption.displayName)
+                                .font(.subheadline)
+                            Image(systemName: "chevron.down")
+                                .font(.caption)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(Color.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 12))
+                        .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
+                    }
+                    
+                    Spacer()
+                    
+                    // Favorites toggle
                     Button(action: {
                         withAnimation(.easeInOut) {
-                            viewModel.selectedFilter = filter
+                            viewModel.showFamilyFavoritesOnly.toggle()
                         }
                     }) {
-                        Text(filter.displayName)
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                    .fill(filter.id == viewModel.selectedFilter.id ? Color(red: 0.36, green: 0.31, blue: 0.55) : Color.white.opacity(0.85))
-                            )
-                            .foregroundStyle(filter.id == viewModel.selectedFilter.id ? Color.white : Color(red: 0.28, green: 0.23, blue: 0.52))
+                        HStack(spacing: 6) {
+                            Image(systemName: viewModel.showFamilyFavoritesOnly ? "star.fill" : "star")
+                                .font(.subheadline)
+                            Text("4★+")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            viewModel.showFamilyFavoritesOnly
+                                ? Color(red: 0.96, green: 0.73, blue: 0.26)
+                                : Color.white.opacity(0.9),
+                            in: RoundedRectangle(cornerRadius: 12)
+                        )
+                        .foregroundStyle(
+                            viewModel.showFamilyFavoritesOnly
+                                ? Color.white
+                                : Color(red: 0.28, green: 0.23, blue: 0.52)
+                        )
                     }
-                    .buttonStyle(.plain)
+                }
+                
+                // Row 2: State picker
+                if !viewModel.availableStates.isEmpty {
+                    Menu {
+                        Picker("State", selection: $viewModel.selectedState) {
+                            Text("All States").tag(String?.none)
+                            ForEach(viewModel.availableStates, id: \.self) { state in
+                                Text(state).tag(String?.some(state))
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "map")
+                                .font(.subheadline)
+                            Text(viewModel.selectedState ?? "All States")
+                                .font(.subheadline)
+                            Spacer()
+                            Image(systemName: "chevron.down")
+                                .font(.caption)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 12))
+                        .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
+                    }
+                }
+                
+                // Row 3: Membership scroll
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Membership")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                    
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(viewModel.membershipFilters) { filter in
+                                Button(action: {
+                                    withAnimation(.easeInOut) {
+                                        viewModel.selectedFilter = filter
+                                    }
+                                }) {
+                                    Text(filter.displayName)
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 10)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                                .fill(filter.id == viewModel.selectedFilter.id
+                                                    ? Color(red: 0.36, green: 0.31, blue: 0.55)
+                                                    : Color.white.opacity(0.85))
+                                        )
+                                        .foregroundStyle(filter.id == viewModel.selectedFilter.id
+                                            ? Color.white
+                                            : Color(red: 0.28, green: 0.23, blue: 0.52))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 8)
         }
-        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 8, trailing: 0))
-    }
-
-    private var statePicker: some View {
-        Picker("State", selection: $viewModel.selectedState) {
-            Text("All States").tag(String?.none)
-            ForEach(viewModel.availableStates, id: \.self) { state in
-                Text(state).tag(String?.some(state))
-            }
-        }
-        .pickerStyle(.menu)
+        .listRowBackground(Color.clear)
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
     }
 
     private var resultsSection: some View {
-        Section("Results") {
+        Section {
             if viewModel.isLoading && !viewModel.hasLoadedParks {
                 loadingView
             } else if let error = viewModel.loadError, !viewModel.hasLoadedParks {
                 errorView(error)
             } else if viewModel.filteredParks.isEmpty {
-                ContentUnavailableView(
-                    "No parks match right now",
-                    systemImage: "leaf",
-                    description: Text("Try adjusting your filters or search terms.")
-                )
-                .frame(maxWidth: .infinity)
-                .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 12, trailing: 0))
+                emptyStateView
             } else {
-                if let error = viewModel.loadError {
-                    errorBanner(error)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 0, trailing: 0))
-                }
-                tableHeader
-                ForEach(viewModel.filteredParks) { park in
-                    NavigationLink {
-                        ParkDetailView(viewModel: viewModel.makeDetailViewModel(for: park))
-                    } label: {
-                        ParkRowView(park: park)
-                            .listRowSeparator(.hidden)
-                    }
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-                }
+                parksListContent
+            }
+        } header: {
+            resultsHeader
+        }
+        .listRowBackground(Color.clear)
+    }
+    
+    private var resultsHeader: some View {
+        HStack {
+            Text("Results")
+                .font(.headline)
+                .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
+            
+            Spacer()
+            
+            if !viewModel.filteredParks.isEmpty {
+                Text("\(viewModel.filteredParks.count) parks")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
-        .listRowBackground(Color.clear)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .textCase(nil)
+    }
+    
+    private var parksListContent: some View {
+        Group {
+            if let error = viewModel.loadError {
+                errorBanner(error)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
+            
+            ForEach(viewModel.filteredParks) { park in
+                NavigationLink {
+                    ParkDetailView(viewModel: viewModel.makeDetailViewModel(for: park))
+                } label: {
+                    ParkRowView(park: park)
+                }
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                .listRowSeparator(.hidden)
+            }
+        }
+    }
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "map")
+                .font(.system(size: 60))
+                .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52).opacity(0.3))
+            
+            VStack(spacing: 8) {
+                Text("No parks match")
+                    .font(.headline)
+                
+                Text("Try adjusting your filters or search terms")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 48)
     }
 }
 
-private enum ParksViewLayout {
-    static let ratingColumnWidth: CGFloat = 104
-}
+// MARK: - Subviews
 
 private extension ParksView {
-    var tableHeader: some View {
-        HStack {
-            Text("Park")
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text("Family")
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
-                .frame(width: ParksViewLayout.ratingColumnWidth, alignment: .trailing)
-
-            Text("Community")
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
-                .frame(width: ParksViewLayout.ratingColumnWidth, alignment: .trailing)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color.white.opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 0, trailing: 0))
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
-    }
-
     var loadingView: some View {
-        HStack {
-            Spacer()
-            ProgressView("Loading parks…")
+        VStack(spacing: 12) {
+            ProgressView()
                 .progressViewStyle(.circular)
-            Spacer()
+                .scaleEffect(1.2)
+            
+            Text("Loading parks…")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
-        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 48)
     }
 
     func errorView(_ error: Error) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 20) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.largeTitle)
+                .font(.system(size: 50))
                 .foregroundStyle(Color.orange)
-            Text("We couldn’t load parks right now.")
-                .font(.headline)
-            Text(error.localizedDescription)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-            Button(action: { Task { await viewModel.loadParks(forceReload: true) } }) {
-                Label("Try Again", systemImage: "arrow.clockwise")
+            
+            VStack(spacing: 8) {
+                Text("Couldn't load parks")
+                    .font(.headline)
+                
+                Text(error.localizedDescription)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
             }
-            .buttonStyle(.borderedProminent)
+            
+            Button(action: {
+                Task {
+                    print("🔄 Retry button tapped")
+                    await viewModel.loadParks(forceReload: true)
+                }
+            }) {
+                Label("Try Again", systemImage: "arrow.clockwise")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Color(red: 0.36, green: 0.31, blue: 0.55), in: Capsule())
+                    .foregroundStyle(.white)
+            }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
+        .padding(.vertical, 48)
     }
 
     func errorBanner(_ error: Error) -> some View {
-        HStack(alignment: .center, spacing: 8) {
-            Image(systemName: "exclamationmark.circle")
-            Text("Couldn’t refresh parks: \(error.localizedDescription)")
-                .font(.footnote)
-                .multilineTextAlignment(.leading)
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(Color.orange)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Couldn't refresh")
+                    .font(.footnote)
+                    .fontWeight(.semibold)
+                
+                Text(error.localizedDescription)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            Spacer()
         }
-        .foregroundStyle(Color.orange)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
     }
 }
+
+// MARK: - Park Row View
 
 private struct ParkRowView: View {
     let park: Park
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(park.name)
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
-                    Text(park.formattedLocation)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 16)
-
-                ratingColumn(title: "Family", icon: "star.fill", value: park.familyRating, accent: Color(red: 0.36, green: 0.31, blue: 0.55))
-
-                ratingColumn(title: "Community", icon: "person.3.fill", value: park.communityRating, accent: Color(red: 0.42, green: 0.37, blue: 0.67))
-            }
-
-            memberships
-
-            if let summary = reviewSummary {
-                Text(summary)
-                    .font(.caption)
+        VStack(alignment: .leading, spacing: 14) {
+            // Header with name and location
+            VStack(alignment: .leading, spacing: 4) {
+                Text(park.name)
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
+                
+                Text(park.formattedLocation)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
+            
+            // Ratings row
+            HStack(spacing: 16) {
+                ratingBadge(
+                    title: "Family",
+                    icon: "star.fill",
+                    value: park.familyRating,
+                    count: park.familyReviewCount,
+                    accent: Color(red: 0.36, green: 0.31, blue: 0.55)
+                )
+                
+                if let communityRating = park.communityRating {
+                    ratingBadge(
+                        title: "Community",
+                        icon: "person.3.fill",
+                        value: communityRating,
+                        count: park.communityReviewCount,
+                        accent: Color(red: 0.42, green: 0.37, blue: 0.67)
+                    )
+                }
+                
+                Spacer()
+            }
+
+            // Memberships
+            if !park.memberships.isEmpty {
+                membershipTags
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.94))
-                .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 3)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.95))
+                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
         )
     }
-
-    private func ratingColumn(title: String, icon: String, value: Double?, accent: Color) -> some View {
-        VStack(alignment: .trailing, spacing: 6) {
+    
+    private func ratingBadge(title: String, icon: String, value: Double, count: Int, accent: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-
+            
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                if let value {
-                    Text(String(format: "%.1f", value))
-                        .fontWeight(.semibold)
-                        .monospacedDigit()
-                } else {
-                    Text("—")
-                        .fontWeight(.semibold)
-                }
+                    .font(.caption)
+                
+                Text(String(format: "%.1f", value))
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(accent.opacity(0.12), in: Capsule())
             .foregroundStyle(accent)
+            
+            if count > 0 {
+                Text("\(count) reviews")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
-        .frame(width: ParksViewLayout.ratingColumnWidth, alignment: .trailing)
     }
 
-    private var memberships: some View {
+    private var membershipTags: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(park.memberships, id: \.self) { membership in
@@ -287,31 +413,24 @@ private struct ParkRowView: View {
                         .fontWeight(.medium)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(membership.badgeColor.opacity(0.16), in: Capsule())
+                        .background(membership.badgeColor.opacity(0.15), in: Capsule())
                         .foregroundStyle(membership.badgeColor)
                 }
             }
-            .padding(.vertical, 2)
-        }
-    }
-
-    private var reviewSummary: String? {
-        let family = park.familyReviewCount
-        let community = park.communityReviewCount
-
-        switch (family, community) {
-        case (0, 0):
-            return nil
-        case (_, 0):
-            return "\(family) family comments"
-        case (0, _):
-            return "\(community) community comments"
-        default:
-            return "\(family) family · \(community) community comments"
         }
     }
 }
 
-#Preview {
-    ParksView(viewModel: ParksViewModel(parks: Park.sampleData))
+// MARK: - Preview
+
+#Preview("With Data") {
+    NavigationStack {
+        ParksView(viewModel: ParksViewModel(parks: Park.sampleData))
+    }
+}
+
+#Preview("Loading") {
+    NavigationStack {
+        ParksView(viewModel: ParksViewModel(parks: []))
+    }
 }

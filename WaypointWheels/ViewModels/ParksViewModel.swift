@@ -54,6 +54,17 @@ final class ParksViewModel: ObservableObject {
                 return "Name"
             }
         }
+        
+        var icon: String {
+            switch self {
+            case .familyRating:
+                return "star.fill"
+            case .communityRating:
+                return "person.3.fill"
+            case .name:
+                return "textformat.abc"
+            }
+        }
     }
 
     @Published private(set) var parks: [Park]
@@ -73,21 +84,43 @@ final class ParksViewModel: ObservableObject {
         self.parksService = parksService
         self.hasLoadedParks = !parks.isEmpty
         self.loadError = nil
+        
+        print("📱 ParksViewModel initialized with \(parks.count) parks")
     }
 
     func loadParks(forceReload: Bool = false) async {
-        guard !isLoading else { return }
-        if hasLoadedParks && !forceReload { return }
+        guard !isLoading else {
+            print("⚠️ Already loading parks, skipping")
+            return
+        }
+        
+        if hasLoadedParks && !forceReload {
+            print("✅ Parks already loaded, skipping")
+            return
+        }
 
+        print("🔄 Starting to load parks (forceReload: \(forceReload))")
         isLoading = true
         loadError = nil
 
         do {
-            let parks = try await parksService.fetchParks()
-            self.parks = parks
+            let fetchedParks = try await parksService.fetchParks()
+            
+            print("✅ Loaded \(fetchedParks.count) parks successfully")
+            
+            self.parks = fetchedParks
             hasLoadedParks = true
+            loadError = nil
+            
         } catch {
+            print("❌ Failed to load parks: \(error.localizedDescription)")
+            
             loadError = error
+            
+            // Don't clear existing parks on refresh error
+            if !forceReload {
+                parks = []
+            }
         }
 
         isLoading = false
@@ -105,12 +138,16 @@ final class ParksViewModel: ObservableObject {
     }
 
     var filteredParks: [Park] {
-        parks
+        let filtered = parks
             .filter { matchesMembershipFilter($0) }
             .filter { matchesRatingFilter($0) }
             .filter { matchesStateFilter($0) }
             .filter { matchesSearch($0) }
             .sorted(by: sortComparator)
+        
+        print("🔍 Filtered to \(filtered.count) parks from \(parks.count) total")
+        
+        return filtered
     }
 
     func makeDetailViewModel(for park: Park) -> ParkDetailViewModel {
@@ -124,8 +161,10 @@ final class ParksViewModel: ObservableObject {
     func replacePark(with park: Park) {
         if let index = parks.firstIndex(where: { $0.id == park.id }) {
             parks[index] = park
+            print("✅ Updated park: \(park.name)")
         } else {
             parks.append(park)
+            print("✅ Added new park: \(park.name)")
         }
     }
 

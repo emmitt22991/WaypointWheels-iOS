@@ -7,6 +7,7 @@ struct Park: Identifiable, Hashable, Decodable {
         case harvestHosts = "Harvest Hosts"
         case passportAmerica = "Passport America"
         case independent = "Independent"
+        case unspecified = "Unspecified Membership"
 
         var id: String { rawValue }
 
@@ -22,13 +23,31 @@ struct Park: Identifiable, Hashable, Decodable {
                 return Color(red: 0.18, green: 0.32, blue: 0.60)
             case .independent:
                 return Color(red: 0.36, green: 0.31, blue: 0.55)
+            case .unspecified:
+                return Color(red: 0.60, green: 0.60, blue: 0.60)
             }
         }
 
         init(from decoder: Decoder) throws {
             let container = try decoder.singleValueContainer()
             let rawValue = try container.decode(String.self)
-            self = Membership(rawValue: rawValue) ?? .independent
+            
+            // Try to match the raw value to known memberships
+            if let membership = Membership(rawValue: rawValue) {
+                self = membership
+            } else {
+                // Try case-insensitive matching
+                let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let membership = Membership.allCases.first(where: {
+                    $0.rawValue.lowercased() == normalized.lowercased()
+                }) {
+                    self = membership
+                } else {
+                    // Default to independent for unknown memberships
+                    print("⚠️ Unknown membership type: '\(rawValue)', defaulting to Independent")
+                    self = .independent
+                }
+            }
         }
 
         func encode(to encoder: Encoder) throws {
@@ -52,6 +71,23 @@ struct Park: Identifiable, Hashable, Decodable {
             case id
             case name
             case systemImage = "system_image"
+        }
+        
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            
+            // Handle both UUID string and missing ID
+            if let idString = try? container.decode(String.self, forKey: .id),
+               let uuid = UUID(uuidString: idString) {
+                id = uuid
+            } else if let uuid = try? container.decode(UUID.self, forKey: .id) {
+                id = uuid
+            } else {
+                id = UUID()
+            }
+            
+            name = try container.decode(String.self, forKey: .name)
+            systemImage = try container.decode(String.self, forKey: .systemImage)
         }
     }
 
@@ -118,21 +154,46 @@ struct Park: Identifiable, Hashable, Decodable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(UUID.self, forKey: .id)
+        
+        // Handle ID - could be UUID string or actual UUID
+        if let idString = try? container.decode(String.self, forKey: .id),
+           let uuid = UUID(uuidString: idString) {
+            id = uuid
+        } else if let uuid = try? container.decode(UUID.self, forKey: .id) {
+            id = uuid
+        } else {
+            print("⚠️ Failed to decode park ID, generating new UUID")
+            id = UUID()
+        }
+        
         name = try container.decode(String.self, forKey: .name)
         state = try container.decode(String.self, forKey: .state)
         city = try container.decode(String.self, forKey: .city)
 
+        // Handle legacy rating field or family_rating
         let legacyRating = try container.decodeIfPresent(Double.self, forKey: .rating)
         familyRating = try container.decodeIfPresent(Double.self, forKey: .familyRating) ?? legacyRating ?? 0
+        
+        // Community rating is optional
         communityRating = try container.decodeIfPresent(Double.self, forKey: .communityRating)
+        
+        // Review counts default to 0
         familyReviewCount = try container.decodeIfPresent(Int.self, forKey: .familyReviewCount) ?? 0
         communityReviewCount = try container.decodeIfPresent(Int.self, forKey: .communityReviewCount) ?? 0
 
-        description = try container.decode(String.self, forKey: .description)
-        memberships = try container.decode([Membership].self, forKey: .memberships)
-        amenities = try container.decode([Amenity].self, forKey: .amenities)
-        featuredNotes = try container.decode([String].self, forKey: .featuredNotes)
+        // Description defaults to empty string
+        description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
+        
+        // Memberships - handle empty arrays
+        memberships = (try? container.decode([Membership].self, forKey: .memberships)) ?? []
+        
+        // Amenities - handle empty arrays
+        amenities = (try? container.decode([Amenity].self, forKey: .amenities)) ?? []
+        
+        // Featured notes - handle empty arrays
+        featuredNotes = (try? container.decode([String].self, forKey: .featuredNotes)) ?? []
+        
+        print("✅ Successfully decoded park: \(name) in \(city), \(state)")
     }
 
     static let sampleData: [Park] = [

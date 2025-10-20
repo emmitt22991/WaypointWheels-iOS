@@ -170,7 +170,7 @@ final class APIClient {
         }
 
         // DEBUG: Print the final URL
-        print("🌐 API Request URL: \(url.absoluteString)")
+        print("ðŸŒ API Request URL: \(url.absoluteString)")
 
         return url
     }
