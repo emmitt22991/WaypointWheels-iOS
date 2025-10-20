@@ -169,6 +169,9 @@ final class APIClient {
             throw APIError.invalidBaseURL(baseURL.absoluteString)
         }
 
+        // DEBUG: Print the final URL
+        print("🌐 API Request URL: \(url.absoluteString)")
+
         return url
     }
 

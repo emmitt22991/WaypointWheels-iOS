@@ -29,7 +29,7 @@ final class ChecklistsService {
 
     func fetchChecklists() async throws -> [Checklist] {
         do {
-            let response: ChecklistsIndexResponse = try await apiClient.request(path: "households/current/checklists")
+            let response: ChecklistsIndexResponse = try await apiClient.request(path: "households/checklists.php")
             return response.checklists
         } catch let error as APIClient.APIError {
             throw ServiceError(apiError: error)
@@ -38,7 +38,7 @@ final class ChecklistsService {
 
     func fetchHouseholdMembers() async throws -> [HouseholdMember] {
         do {
-            let response: HouseholdMembersResponse = try await apiClient.request(path: "households/current/members")
+            let response: HouseholdMembersResponse = try await apiClient.request(path: "households/members.php")
             return response.members
         } catch let error as APIClient.APIError {
             throw ServiceError(apiError: error)
@@ -47,7 +47,7 @@ final class ChecklistsService {
 
     func createChecklist(from draft: ChecklistDraft) async throws -> Checklist {
         do {
-            let response: ChecklistResponse = try await apiClient.request(path: "households/current/checklists",
+            let response: ChecklistResponse = try await apiClient.request(path: "households/checklists.php",
                                                                          method: "POST",
                                                                          body: draft)
             return response.checklist
@@ -58,7 +58,7 @@ final class ChecklistsService {
 
     func updateChecklist(_ checklist: ChecklistDraft, id: Checklist.ID) async throws -> Checklist {
         do {
-            let response: ChecklistResponse = try await apiClient.request(path: "households/current/checklists/\(id.uuidString)",
+            let response: ChecklistResponse = try await apiClient.request(path: "households/checklist.php/\(id.uuidString)",
                                                                          method: "PATCH",
                                                                          body: checklist)
             return response.checklist
@@ -69,7 +69,7 @@ final class ChecklistsService {
 
     func deleteChecklist(id: Checklist.ID) async throws {
         do {
-            let _: EmptyResponse = try await apiClient.request(path: "households/current/checklists/\(id.uuidString)",
+            let _: EmptyResponse = try await apiClient.request(path: "households/checklist.php/\(id.uuidString)",
                                                                 method: "DELETE",
                                                                 body: Optional<EmptyBody>.none)
         } catch let error as APIClient.APIError {
@@ -80,7 +80,7 @@ final class ChecklistsService {
     func fetchDailyAssignments(for date: Date = Date()) async throws -> DailyAssignmentsResponse {
         let dateString = ChecklistsService.dateFormatter.string(from: date)
         do {
-            let response: DailyAssignmentsResponse = try await apiClient.request(path: "households/current/checklists/daily/\(dateString)")
+            let response: DailyAssignmentsResponse = try await apiClient.request(path: "households/checklists-daily.php/\(dateString)")
             return response
         } catch let error as APIClient.APIError {
             throw ServiceError(apiError: error)
@@ -94,7 +94,7 @@ final class ChecklistsService {
         let payload = ChecklistItemCompletionRequest(targetDate: ChecklistsService.dateFormatter.string(from: targetDate),
                                                      isComplete: isComplete)
         do {
-            let response: ChecklistRunResponse = try await apiClient.request(path: "households/current/checklists/\(checklistID.uuidString)/items/\(itemID.uuidString)/completion",
+            let response: ChecklistRunResponse = try await apiClient.request(path: "households/checklist-item-completion.php/\(checklistID.uuidString)/\(itemID.uuidString)",
                                                                              method: "POST",
                                                                              body: payload)
             return response.checklist
