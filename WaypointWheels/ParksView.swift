@@ -4,6 +4,11 @@ import SwiftUI
 struct ParksView: View {
     @StateObject private var viewModel: ParksViewModel
 
+    private let backgroundGradient = LinearGradient(colors: [
+        Color(red: 0.95, green: 0.96, blue: 0.99),
+        Color(red: 0.99, green: 0.95, blue: 0.89)
+    ], startPoint: .topLeading, endPoint: .bottomTrailing)
+
     init(viewModel: ParksViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
     }
@@ -13,33 +18,20 @@ struct ParksView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List {
-                filtersSection
-                resultsSection
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(backgroundGradient)
-            .navigationTitle("Parks")
-            .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $viewModel.searchText,
-                        placement: .navigationBarDrawer(displayMode: .always),
-                        prompt: Text("Search by name or city"))
-            .refreshable { await viewModel.loadParks(forceReload: true) }
+        List {
+            filtersSection
+            resultsSection
         }
-        .navigationDestination(for: Park.self) { park in
-            ParkDetailView(viewModel: viewModel.makeDetailViewModel(for: park))
-        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(backgroundGradient.ignoresSafeArea())
+        .navigationTitle("Parks")
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $viewModel.searchText,
+                    placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: Text("Search by name or city"))
+        .refreshable { await viewModel.loadParks(forceReload: true) }
         .task { await viewModel.loadParks() }
-    }
-
-    private var backgroundGradient: some View {
-        LinearGradient(colors: [
-            Color(red: 0.95, green: 0.96, blue: 0.99),
-            Color(red: 0.99, green: 0.95, blue: 0.89)
-        ], startPoint: .topLeading, endPoint: .bottomTrailing)
-        .ignoresSafeArea()
     }
 
     private var filtersSection: some View {
@@ -130,7 +122,9 @@ struct ParksView: View {
                 }
                 tableHeader
                 ForEach(viewModel.filteredParks) { park in
-                    NavigationLink(value: park) {
+                    NavigationLink {
+                        ParkDetailView(viewModel: viewModel.makeDetailViewModel(for: park))
+                    } label: {
                         ParkRowView(park: park)
                             .listRowSeparator(.hidden)
                     }
