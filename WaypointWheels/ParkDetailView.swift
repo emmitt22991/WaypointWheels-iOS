@@ -460,12 +460,14 @@ struct ParkDetailView: View {
                     if viewModel.isSubmittingRating {
                         ProgressView()
                             .progressViewStyle(.circular)
+                            .frame(maxWidth: .infinity)
                     } else {
-                        Label("Submit Rating", systemImage: "star.circle.fill")
+                        actionButtonLabel(title: "Submit Rating", systemImage: "star.circle.fill")
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(viewModel.isSubmittingRating)
+                .frame(maxWidth: .infinity)
             }
             .padding(.vertical, 4)
         }
@@ -475,15 +477,9 @@ struct ParkDetailView: View {
     private var reviewFormSection: some View {
         Section("Leave a review") {
             VStack(alignment: .leading, spacing: 12) {
-                Slider(value: $viewModel.reviewRatingDraft, in: 0...5, step: 0.5) {
-                    Text("Review rating")
-                } minimumValueLabel: {
-                    Text("0")
-                        .font(.caption)
-                } maximumValueLabel: {
-                    Text("5")
-                        .font(.caption)
-                }
+                Text("Your review will use your rating of \(String(format: "%.1f", viewModel.ratingDraft))★.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 TextEditor(text: $viewModel.reviewDraft)
                     .focused($isReviewFocused)
@@ -502,12 +498,14 @@ struct ParkDetailView: View {
                     if viewModel.isSubmittingReview {
                         ProgressView()
                             .progressViewStyle(.circular)
+                            .frame(maxWidth: .infinity)
                     } else {
-                        Label("Post Review", systemImage: "text.bubble")
+                        actionButtonLabel(title: "Post Review", systemImage: "text.bubble")
                     }
                 }
                 .buttonStyle(.bordered)
                 .disabled(viewModel.isSubmittingReview)
+                .frame(maxWidth: .infinity)
             }
             .padding(.vertical, 4)
         }
@@ -543,12 +541,14 @@ struct ParkDetailView: View {
                     if viewModel.isUploadingPhoto {
                         ProgressView()
                             .progressViewStyle(.circular)
+                            .frame(maxWidth: .infinity)
                     } else {
-                        Label("Upload Photo", systemImage: "square.and.arrow.up")
+                        actionButtonLabel(title: "Upload Photo", systemImage: "square.and.arrow.up")
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(viewModel.isUploadingPhoto)
+                .frame(maxWidth: .infinity)
             }
             .padding(.vertical, 4)
         }
@@ -580,6 +580,15 @@ struct ParkDetailView: View {
                 .background(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color(.systemGray4)))
             }
         }
+    }
+
+    private func actionButtonLabel(title: String, systemImage: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+            Text(title)
+                .fontWeight(.semibold)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     @MainActor

@@ -251,3 +251,25 @@ struct Park: Identifiable, Hashable, Decodable {
         )
     ]
 }
+
+extension Park {
+    func updating(familyRating: Double? = nil,
+                  communityRating: Double?? = nil,
+                  familyReviewCount: Int? = nil,
+                  communityReviewCount: Int? = nil) -> Park {
+        Park(
+            id: id,
+            name: name,
+            state: state,
+            city: city,
+            familyRating: familyRating ?? self.familyRating,
+            communityRating: communityRating ?? self.communityRating,
+            familyReviewCount: familyReviewCount ?? self.familyReviewCount,
+            communityReviewCount: communityReviewCount ?? self.communityReviewCount,
+            description: description,
+            memberships: memberships,
+            amenities: amenities,
+            featuredNotes: featuredNotes
+        )
+    }
+}
