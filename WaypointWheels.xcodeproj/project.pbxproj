@@ -27,6 +27,7 @@
 		209E95B72E97E3CB00C4F598 /* WaypointWheels.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WaypointWheels.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		209E95C72E97E3CD00C4F598 /* WaypointWheelsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WaypointWheelsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		209E95D12E97E3CD00C4F598 /* WaypointWheelsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WaypointWheelsUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		20B390E32EA7AA6E006AF824 /* ParkRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ParkRow.swift; path = WaypointWheels/ViewModels/ParkRow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -88,6 +89,7 @@
 		209E95AE2E97E3CB00C4F598 = {
 			isa = PBXGroup;
 			children = (
+				20B390E32EA7AA6E006AF824 /* ParkRow.swift */,
 				209E95B92E97E3CB00C4F598 /* WaypointWheels */,
 				209E95CA2E97E3CD00C4F598 /* WaypointWheelsTests */,
 				209E95D42E97E3CD00C4F598 /* WaypointWheelsUITests */,

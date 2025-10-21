@@ -23,7 +23,7 @@ final class ParkDetailViewModel: ObservableObject {
 
     init(parkID: UUID,
          initialSummary: Park,
-         service: ParksService = ParksService(),
+         service: ParksService,
          onParkUpdated: @escaping (Park) -> Void,
          prefetchedDetail: ParkDetail? = nil) {
         self.parkID = parkID

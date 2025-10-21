@@ -1,258 +1,158 @@
 import Foundation
 
-final class ParksService {
-    enum ParksServiceError: LocalizedError, Equatable {
-        case missingConfiguration
-        case invalidBaseURL(String)
-        case invalidResponse
-        case serverError(String)
-        case decodingError(String)
-
-        var errorDescription: String? {
-            switch self {
-            case .missingConfiguration:
-                return "Missing API base URL configuration."
-            case let .invalidBaseURL(value):
-                return "Invalid API base URL: \(value)."
-            case .invalidResponse:
-                return "Unexpected response from the parks endpoint."
-            case let .serverError(message):
-                return message
-            case let .decodingError(details):
-                return "Failed to decode parks data: \(details)"
-            }
+enum ParksServiceError: Error, LocalizedError {
+    case invalidURL
+    case networkError(Error)
+    case decodingError(Error)
+    case serverError(String)
+    case invalidResponse
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "Invalid URL"
+        case .networkError(let error):
+            return "Network error: \(error.localizedDescription)"
+        case .decodingError(let error):
+            return "Failed to decode response: \(error.localizedDescription)"
+        case .serverError(let message):
+            return "Server error: \(message)"
+        case .invalidResponse:
+            return "Invalid response from server"
         }
     }
+}
 
-    private let apiClient: APIClient
 
-    init(apiClient: APIClient = APIClient()) {
-        self.apiClient = apiClient
+
+@MainActor
+final class ParksService {
+    private let baseURL: String
+    
+    init(baseURL: String = "https://waypointwheels.com/api") {
+        self.baseURL = baseURL
     }
-
+    
     func fetchParks() async throws -> [Park] {
-        print("🌐 ParksService: Starting to fetch parks...")
+        let urlString = "\(baseURL)/parks/"
+        guard let url = URL(string: urlString) else {
+            throw ParksServiceError.invalidURL
+        }
         
         do {
-            let parks: [Park] = try await apiClient.request(path: "parks.php")
+            let (data, response) = try await URLSession.shared.data(from: url)
             
-            print("✅ ParksService: Successfully fetched \(parks.count) parks")
-            
-            if let firstPark = parks.first {
-                print("📍 Sample park: \(firstPark.name) in \(firstPark.city), \(firstPark.state)")
-                print("   Rating: \(firstPark.familyRating)")
-                print("   Memberships: \(firstPark.memberships.map { $0.name }.joined(separator: ", "))")
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw ParksServiceError.invalidResponse
             }
             
+            guard httpResponse.statusCode == 200 else {
+                if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                    throw ParksServiceError.serverError(errorResponse.message ?? errorResponse.error)
+                }
+                throw ParksServiceError.serverError("HTTP \(httpResponse.statusCode)")
+            }
+            
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            
+            let parks = try decoder.decode([Park].self, from: data)
             return parks
             
-        } catch let error as APIClient.APIError {
-            print("❌ ParksService: API error occurred")
-            print("   Error type: \(error)")
-            print("   Description: \(error.localizedDescription)")
-            
-            throw ParksServiceError(apiError: error)
-            
-        } catch let decodingError as DecodingError {
-            print("❌ ParksService: Decoding error occurred")
-            
-            let errorDetails = formatDecodingError(decodingError)
-            print("   Details: \(errorDetails)")
-            
-            throw ParksServiceError.decodingError(errorDetails)
-            
+        } catch let error as ParksServiceError {
+            throw error
         } catch {
-            print("❌ ParksService: Unexpected error occurred")
-            print("   Error: \(error)")
-            print("   Type: \(type(of: error))")
-            
-            throw ParksServiceError.serverError(error.localizedDescription)
-        }
-    }
-
-    func fetchParkDetail(parkID: UUID) async throws -> ParkDetail {
-        print("🌐 ParksService: Fetching detail for park \(parkID.uuidString)")
-        
-        do {
-            let detail: ParkDetail = try await apiClient.request(path: "parks/\(parkID.uuidString)")
-            
-            print("✅ ParksService: Successfully fetched park detail")
-            print("   Park: \(detail.summary.name)")
-            print("   Photos: \(detail.familyPhotos.count + detail.communityPhotos.count)")
-            print("   Reviews: \(detail.familyReviews.count + detail.communityReviews.count)")
-            
-            return detail
-            
-        } catch let error as APIClient.APIError {
-            print("❌ ParksService: API error fetching park detail")
-            print("   Error: \(error.localizedDescription)")
-            
-            throw ParksServiceError(apiError: error)
-            
-        } catch let decodingError as DecodingError {
-            print("❌ ParksService: Decoding error for park detail")
-            
-            let errorDetails = formatDecodingError(decodingError)
-            print("   Details: \(errorDetails)")
-            
-            throw ParksServiceError.decodingError(errorDetails)
-            
-        } catch {
-            print("❌ ParksService: Unexpected error fetching park detail")
-            print("   Error: \(error)")
-            
-            throw ParksServiceError.serverError(error.localizedDescription)
-        }
-    }
-
-    func submitRating(parkID: UUID, rating: Double) async throws -> Park {
-        print("🌐 ParksService: Submitting rating \(rating) for park \(parkID.uuidString)")
-        
-        let request = RatingRequest(rating: rating)
-        
-        do {
-            let updatedPark: Park = try await apiClient.request(
-                path: "parks/\(parkID.uuidString)/rating",
-                method: "PUT",
-                body: request
-            )
-            
-            print("✅ ParksService: Rating submitted successfully")
-            
-            return updatedPark
-            
-        } catch let error as APIClient.APIError {
-            print("❌ ParksService: API error submitting rating")
-            print("   Error: \(error.localizedDescription)")
-            
-            throw ParksServiceError(apiError: error)
-            
-        } catch {
-            print("❌ ParksService: Unexpected error submitting rating")
-            print("   Error: \(error)")
-            
-            throw ParksServiceError.serverError(error.localizedDescription)
-        }
-    }
-
-    func submitReview(parkID: UUID, rating: Double, comment: String) async throws -> ParkDetail.Review {
-        print("🌐 ParksService: Submitting review for park \(parkID.uuidString)")
-        print("   Rating: \(rating)")
-        print("   Comment length: \(comment.count) characters")
-        
-        let request = ReviewRequest(rating: rating, comment: comment)
-        
-        do {
-            let review: ParkDetail.Review = try await apiClient.request(
-                path: "parks/\(parkID.uuidString)/reviews",
-                method: "POST",
-                body: request
-            )
-            
-            print("✅ ParksService: Review submitted successfully")
-            
-            return review
-            
-        } catch let error as APIClient.APIError {
-            print("❌ ParksService: API error submitting review")
-            print("   Error: \(error.localizedDescription)")
-            
-            throw ParksServiceError(apiError: error)
-            
-        } catch {
-            print("❌ ParksService: Unexpected error submitting review")
-            print("   Error: \(error)")
-            
-            throw ParksServiceError.serverError(error.localizedDescription)
-        }
-    }
-
-    func uploadPhoto(parkID: UUID, data: Data, filename: String, caption: String?) async throws -> ParkDetail.Photo {
-        print("🌐 ParksService: Uploading photo for park \(parkID.uuidString)")
-        print("   Filename: \(filename)")
-        print("   Data size: \(data.count) bytes")
-        print("   Caption: \(caption ?? "none")")
-        
-        let request = UploadPhotoRequest(
-            data: data.base64EncodedString(),
-            filename: filename,
-            caption: caption
-        )
-        
-        do {
-            let photo: ParkDetail.Photo = try await apiClient.request(
-                path: "parks/\(parkID.uuidString)/photos",
-                method: "POST",
-                body: request
-            )
-            
-            print("✅ ParksService: Photo uploaded successfully")
-            print("   Photo ID: \(photo.id)")
-            
-            return photo
-            
-        } catch let error as APIClient.APIError {
-            print("❌ ParksService: API error uploading photo")
-            print("   Error: \(error.localizedDescription)")
-            
-            throw ParksServiceError(apiError: error)
-            
-        } catch {
-            print("❌ ParksService: Unexpected error uploading photo")
-            print("   Error: \(error)")
-            
-            throw ParksServiceError.serverError(error.localizedDescription)
+            throw ParksServiceError.networkError(error)
         }
     }
     
-    private func formatDecodingError(_ error: DecodingError) -> String {
-        switch error {
-        case .typeMismatch(let type, let context):
-            return "Type mismatch for \(type) at \(context.codingPath.map { $0.stringValue }.joined(separator: " -> ")). \(context.debugDescription)"
-            
-        case .valueNotFound(let type, let context):
-            return "Value not found for \(type) at \(context.codingPath.map { $0.stringValue }.joined(separator: " -> ")). \(context.debugDescription)"
-            
-        case .keyNotFound(let key, let context):
-            return "Key '\(key.stringValue)' not found at \(context.codingPath.map { $0.stringValue }.joined(separator: " -> ")). \(context.debugDescription)"
-            
-        case .dataCorrupted(let context):
-            return "Data corrupted at \(context.codingPath.map { $0.stringValue }.joined(separator: " -> ")). \(context.debugDescription)"
-            
-        @unknown default:
-            return "Unknown decoding error: \(error.localizedDescription)"
+    func fetchParkDetail(parkID: UUID) async throws -> ParkDetail {
+        let urlString = "\(baseURL)/parks/index.php?id=\(parkID.uuidString)"
+        guard let url = URL(string: urlString) else {
+            throw ParksServiceError.invalidURL
         }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw ParksServiceError.invalidResponse
+            }
+            
+            guard httpResponse.statusCode == 200 else {
+                if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                    throw ParksServiceError.serverError(errorResponse.message ?? errorResponse.error)
+                }
+                throw ParksServiceError.serverError("HTTP \(httpResponse.statusCode)")
+            }
+            
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            
+            let detail = try decoder.decode(ParkDetail.self, from: data)
+            return detail
+            
+        } catch let error as ParksServiceError {
+            throw error
+        } catch let error as DecodingError {
+            throw ParksServiceError.decodingError(error)
+        } catch {
+            throw ParksServiceError.networkError(error)
+        }
+    }
+    
+    func submitRating(parkID: UUID, rating: Double) async throws -> Park {
+        // TODO: Implement actual API call
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        
+        // Return mock updated park
+        return Park(
+            id: parkID,
+            name: "Mock Park",
+            state: "CA",
+            city: "Test City",
+            familyRating: rating,
+            communityRating: rating,
+            familyReviewCount: 1,
+            communityReviewCount: 1,
+            description: "",
+            memberships: [],
+            amenities: [],
+            featuredNotes: []
+        )
+    }
+    
+    func submitReview(parkID: UUID, rating: Double, comment: String) async throws -> ParkDetail.Review {
+        // TODO: Implement actual API call
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        
+        // Return mock review
+        return ParkDetail.Review(
+            id: UUID(),
+            authorName: "You",
+            rating: rating,
+            comment: comment,
+            createdAt: Date(),
+            isFamilyReview: true
+        )
+    }
+    
+    func uploadPhoto(parkID: UUID, data: Data, filename: String, caption: String?) async throws -> ParkDetail.Photo {
+        // TODO: Implement actual API call
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        
+        // Return mock photo
+        return ParkDetail.Photo(
+            id: UUID(),
+            imageURL: URL(string: "https://via.placeholder.com/300")!,
+            caption: caption,
+            uploadedBy: "You",
+            isFamilyPhoto: true
+        )
     }
 }
 
-private extension ParksService.ParksServiceError {
-    init(apiError: APIClient.APIError) {
-        switch apiError {
-        case .missingConfiguration:
-            self = .missingConfiguration
-        case let .invalidBaseURL(value):
-            self = .invalidBaseURL(value)
-        case .invalidResponse:
-            self = .invalidResponse
-        case let .serverError(message, _):
-            self = .serverError(message)
-        }
-    }
-}
-
-private extension ParksService {
-    struct RatingRequest: Encodable {
-        let rating: Double
-    }
-
-    struct ReviewRequest: Encodable {
-        let rating: Double
-        let comment: String
-    }
-
-    struct UploadPhotoRequest: Encodable {
-        let data: String
-        let filename: String
-        let caption: String?
-    }
+private struct ErrorResponse: Codable {
+    let error: String
+    let message: String?
 }

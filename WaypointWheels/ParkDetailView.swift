@@ -659,9 +659,10 @@ struct ParkDetailView: View {
     )
     let viewModel = ParkDetailViewModel(parkID: park.id,
                                         initialSummary: park,
+                                        service: ParksService(),
                                         onParkUpdated: { _ in },
                                         prefetchedDetail: detail)
-    return NavigationStack {
+    NavigationStack {
         ParkDetailView(viewModel: viewModel)
     }
 }

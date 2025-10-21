@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor
 final class ParksViewModel: ObservableObject {
-    enum MembershipFilter: Identifiable, Equatable {
+    enum MembershipFilter: Identifiable, Equatable, Hashable {
         case all
         case membership(String)
 
@@ -33,6 +33,15 @@ final class ParksViewModel: ObservableObject {
                 return lhsValue == rhsValue
             default:
                 return false
+            }
+        }
+        
+        func hash(into hasher: inout Hasher) {
+            switch self {
+            case .all:
+                hasher.combine("all")
+            case .membership(let name):
+                hasher.combine(name)
             }
         }
     }
@@ -79,7 +88,7 @@ final class ParksViewModel: ObservableObject {
 
     private let parksService: ParksService
 
-    init(parks: [Park] = [], parksService: ParksService = ParksService()) {
+    init(parks: [Park] = [], parksService: ParksService) {
         self.parks = parks
         self.parksService = parksService
         self.hasLoadedParks = !parks.isEmpty
@@ -153,9 +162,10 @@ final class ParksViewModel: ObservableObject {
     func makeDetailViewModel(for park: Park) -> ParkDetailViewModel {
         ParkDetailViewModel(parkID: park.id,
                             initialSummary: park,
-                            service: parksService) { [weak self] updatedPark in
+                            service: parksService,
+                            onParkUpdated: { [weak self] updatedPark in
             self?.replacePark(with: updatedPark)
-        }
+        })
     }
 
     func replacePark(with park: Park) {

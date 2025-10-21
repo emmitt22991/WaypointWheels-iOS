@@ -72,17 +72,27 @@ struct DashboardView: View {
                     .padding(.bottom, 120)
                 }
                 .refreshable {
-                    await tripsViewModel.loadItinerary(forceReload: true)
-                    await checklistsViewModel.refresh()
-                }
+                                    await tripsViewModel.loadItinerary(forceReload: true)
+                                    await checklistsViewModel.refresh()
+                                }
 
-                bottomNavigation
-            }
-        }
-        .task {
-            await tripsViewModel.loadItinerary()
-        }
-    }
+                                bottomNavigation
+                            }
+                        }
+                        .task {
+                            await tripsViewModel.loadItinerary()
+                        }
+                        .navigationDestination(for: Park.self) { park in
+                            let parksService = ParksService()
+                            let viewModel = ParkDetailViewModel(
+                                parkID: park.id,
+                                initialSummary: park,
+                                service: parksService,
+                                onParkUpdated: { _ in }
+                            )
+                            ParkDetailView(viewModel: viewModel)
+                        }
+                    }
 
     private var heroSection: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -412,9 +422,7 @@ struct DashboardView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                 Spacer()
-                NavigationLink {
-                    ParksView()
-                } label: {
+                NavigationLink(destination: ParksView()) {
                     Label("Browse All Parks", systemImage: "leaf")
                         .font(.subheadline)
                         .padding(.horizontal, 16)
