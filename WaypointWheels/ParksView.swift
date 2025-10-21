@@ -407,8 +407,8 @@ private struct ParkRowView: View {
     private var membershipTags: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(park.memberships, id: \.self) { membership in
-                    Text(membership.rawValue)
+                ForEach(park.memberships, id: \.id) { membership in
+                    Text(membership.name)
                         .font(.caption)
                         .fontWeight(.medium)
                         .padding(.horizontal, 10)

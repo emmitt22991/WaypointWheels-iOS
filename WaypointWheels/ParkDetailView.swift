@@ -171,8 +171,8 @@ struct ParkDetailView: View {
 
     private var memberships: some View {
         HStack(spacing: 10) {
-            ForEach(viewModel.summary.memberships, id: \.self) { membership in
-                Text(membership.rawValue)
+            ForEach(viewModel.summary.memberships, id: \.id) { membership in
+                Text(membership.name)
                     .font(.caption)
                     .fontWeight(.semibold)
                     .padding(.horizontal, 12)
@@ -517,29 +517,10 @@ struct ParkDetailView: View {
     private var photoUploadSection: some View {
         Section("Share a photo") {
             VStack(alignment: .leading, spacing: 12) {
+                let previewLabel = makePhotoPickerLabel()
+                
                 PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                    if let preview = selectedPhotoPreview {
-                        preview
-                            .resizable()
-                            .scaledToFill()
-                            .frame(height: 160)
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay(alignment: .bottomTrailing) {
-                                Image(systemName: "pencil")
-                                    .padding(8)
-                                    .background(.thinMaterial, in: Circle())
-                                    .padding(8)
-                            }
-                    } else {
-                        HStack {
-                            Image(systemName: "photo.on.rectangle")
-                            Text("Choose Photo")
-                                .fontWeight(.semibold)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color(.systemGray4)))
-                    }
+                    previewLabel
                 }
 
                 TextField("Caption (optional)", text: $viewModel.photoCaption)
@@ -574,6 +555,61 @@ struct ParkDetailView: View {
         .listRowBackground(Color.clear)
     }
 
+    private func makePhotoPickerLabel() -> some View {
+        Group {
+            if let preview = selectedPhotoPreview {
+                preview
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 160)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "pencil")
+                            .padding(8)
+                            .background(.thinMaterial, in: Circle())
+                            .padding(8)
+                    }
+            } else {
+                HStack {
+                    Image(systemName: "photo.on.rectangle")
+                    Text("Choose Photo")
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color(.systemGray4)))
+            }
+        }
+    }
+
+    @MainActor
+    private var photoPickerLabel: some View {
+        Group {
+            if let preview = selectedPhotoPreview {
+                preview
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 160)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "pencil")
+                            .padding(8)
+                            .background(.thinMaterial, in: Circle())
+                            .padding(8)
+                    }
+            } else {
+                HStack {
+                    Image(systemName: "photo.on.rectangle")
+                    Text("Choose Photo")
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color(.systemGray4)))
+            }
+        }
+    }
+
     private func loadPreview(for item: PhotosPickerItem?) {
         guard let item else {
             selectedPhotoData = nil
@@ -581,30 +617,32 @@ struct ParkDetailView: View {
             return
         }
 
-        Task {
+        Task.detached {
             do {
                 if let data = try await item.loadTransferable(type: Data.self) {
                     await MainActor.run {
-                        selectedPhotoData = data
+                        self.selectedPhotoData = data
 #if canImport(UIKit)
                         if let uiImage = UIImage(data: data) {
-                            selectedPhotoPreview = Image(uiImage: uiImage)
+                            self.selectedPhotoPreview = Image(uiImage: uiImage)
                         } else {
-                            selectedPhotoPreview = nil
+                            self.selectedPhotoPreview = nil
                         }
 #else
-                        selectedPhotoPreview = nil
+                        self.selectedPhotoPreview = nil
 #endif
                     }
                 }
             } catch {
                 await MainActor.run {
-                    viewModel.alertMessage = error.userFacingMessage
+                    self.viewModel.alertMessage = error.userFacingMessage
                 }
             }
         }
     }
 }
+
+
 
 #Preview {
     let park = Park.sampleData[0]

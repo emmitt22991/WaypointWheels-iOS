@@ -34,14 +34,14 @@ final class ParksService {
         print("🌐 ParksService: Starting to fetch parks...")
         
         do {
-            let parks: [Park] = try await apiClient.request(path: "../api/parks.php")
+            let parks: [Park] = try await apiClient.request(path: "parks.php")
             
             print("✅ ParksService: Successfully fetched \(parks.count) parks")
             
             if let firstPark = parks.first {
                 print("📍 Sample park: \(firstPark.name) in \(firstPark.city), \(firstPark.state)")
                 print("   Rating: \(firstPark.familyRating)")
-                print("   Memberships: \(firstPark.memberships.map { $0.rawValue }.joined(separator: ", "))")
+                print("   Memberships: \(firstPark.memberships.map { $0.name }.joined(separator: ", "))")
             }
             
             return parks
@@ -74,7 +74,7 @@ final class ParksService {
         print("🌐 ParksService: Fetching detail for park \(parkID.uuidString)")
         
         do {
-            let detail: ParkDetail = try await apiClient.request(path: "../api/parks/\(parkID.uuidString)")
+            let detail: ParkDetail = try await apiClient.request(path: "parks/\(parkID.uuidString)")
             
             print("✅ ParksService: Successfully fetched park detail")
             print("   Park: \(detail.summary.name)")
@@ -112,8 +112,8 @@ final class ParksService {
         
         do {
             let updatedPark: Park = try await apiClient.request(
-                path: "../api/parks/\(parkID.uuidString)/rating",
-                method: .put,
+                path: "parks/\(parkID.uuidString)/rating",
+                method: "PUT",
                 body: request
             )
             
@@ -144,8 +144,8 @@ final class ParksService {
         
         do {
             let review: ParkDetail.Review = try await apiClient.request(
-                path: "../api/parks/\(parkID.uuidString)/reviews",
-                method: .post,
+                path: "parks/\(parkID.uuidString)/reviews",
+                method: "POST",
                 body: request
             )
             
@@ -181,8 +181,8 @@ final class ParksService {
         
         do {
             let photo: ParkDetail.Photo = try await apiClient.request(
-                path: "../api/parks/\(parkID.uuidString)/photos",
-                method: .post,
+                path: "parks/\(parkID.uuidString)/photos",
+                method: "POST",
                 body: request
             )
             

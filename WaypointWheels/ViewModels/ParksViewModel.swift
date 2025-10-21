@@ -5,14 +5,14 @@ import Foundation
 final class ParksViewModel: ObservableObject {
     enum MembershipFilter: Identifiable, Equatable {
         case all
-        case membership(Park.Membership)
+        case membership(String)
 
         var id: String {
             switch self {
             case .all:
                 return "all"
-            case let .membership(membership):
-                return membership.rawValue
+            case let .membership(name):
+                return name
             }
         }
 
@@ -20,8 +20,8 @@ final class ParksViewModel: ObservableObject {
             switch self {
             case .all:
                 return "All Memberships"
-            case let .membership(membership):
-                return membership.rawValue
+            case let .membership(name):
+                return name
             }
         }
 
@@ -132,9 +132,9 @@ final class ParksViewModel: ObservableObject {
     }
 
     var membershipFilters: [MembershipFilter] {
-        let memberships = Set(parks.flatMap { $0.memberships })
-        let sortedMemberships = memberships.sorted { $0.rawValue < $1.rawValue }
-        return [.all] + sortedMemberships.map { MembershipFilter.membership($0) }
+        let membershipNames = Set(parks.flatMap { $0.memberships.map { $0.name } })
+        let sortedNames = membershipNames.sorted()
+        return [.all] + sortedNames.map { MembershipFilter.membership($0) }
     }
 
     var filteredParks: [Park] {
@@ -177,8 +177,8 @@ final class ParksViewModel: ObservableObject {
         switch selectedFilter {
         case .all:
             return true
-        case let .membership(membership):
-            return park.memberships.contains(membership)
+        case let .membership(name):
+            return park.memberships.contains(where: { $0.name == name })
         }
     }
 

@@ -1,58 +1,37 @@
 import SwiftUI
 
 struct Park: Identifiable, Hashable, Decodable {
-    enum Membership: String, CaseIterable, Identifiable, Codable {
-        case thousandTrails = "Thousand Trails"
-        case koa = "KOA"
-        case harvestHosts = "Harvest Hosts"
-        case passportAmerica = "Passport America"
-        case independent = "Independent"
-        case unspecified = "Unspecified Membership"
-
-        var id: String { rawValue }
-
+    struct Membership: Identifiable, Hashable, Codable {
+        let name: String
+        
+        var id: String { name }
+        
         var badgeColor: Color {
-            switch self {
-            case .thousandTrails:
-                return Color(red: 0.20, green: 0.52, blue: 0.36)
-            case .koa:
-                return Color(red: 0.96, green: 0.73, blue: 0.26)
-            case .harvestHosts:
-                return Color(red: 0.47, green: 0.34, blue: 0.58)
-            case .passportAmerica:
-                return Color(red: 0.18, green: 0.32, blue: 0.60)
-            case .independent:
-                return Color(red: 0.36, green: 0.31, blue: 0.55)
-            case .unspecified:
-                return Color(red: 0.60, green: 0.60, blue: 0.60)
-            }
+            // Generate a consistent color based on the membership name
+            let hash = name.utf8.reduce(0) { ($0 &+ UInt64($1)) }
+            
+            // Use golden ratio for better color distribution
+            let hue = Double((hash % 360)) / 360.0
+            
+            // Keep saturation and brightness in pleasant ranges
+            let saturation = 0.6 + (Double((hash >> 8) % 20) / 100.0) // 0.6-0.8
+            let brightness = 0.7 + (Double((hash >> 16) % 20) / 100.0) // 0.7-0.9
+            
+            return Color(hue: hue, saturation: saturation, brightness: brightness)
         }
-
+        
+        init(name: String) {
+            self.name = name
+        }
+        
         init(from decoder: Decoder) throws {
             let container = try decoder.singleValueContainer()
-            let rawValue = try container.decode(String.self)
-            
-            // Try to match the raw value to known memberships
-            if let membership = Membership(rawValue: rawValue) {
-                self = membership
-            } else {
-                // Try case-insensitive matching
-                let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                if let membership = Membership.allCases.first(where: {
-                    $0.rawValue.lowercased() == normalized.lowercased()
-                }) {
-                    self = membership
-                } else {
-                    // Default to independent for unknown memberships
-                    print("⚠️ Unknown membership type: '\(rawValue)', defaulting to Independent")
-                    self = .independent
-                }
-            }
+            self.name = try container.decode(String.self)
         }
-
+        
         func encode(to encoder: Encoder) throws {
             var container = encoder.singleValueContainer()
-            try container.encode(rawValue)
+            try container.encode(name)
         }
     }
 
@@ -76,7 +55,6 @@ struct Park: Identifiable, Hashable, Decodable {
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             
-            // Handle both UUID string and missing ID
             if let idString = try? container.decode(String.self, forKey: .id),
                let uuid = UUID(uuidString: idString) {
                 id = uuid
@@ -155,7 +133,6 @@ struct Park: Identifiable, Hashable, Decodable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
-        // Handle ID - could be UUID string or actual UUID
         if let idString = try? container.decode(String.self, forKey: .id),
            let uuid = UUID(uuidString: idString) {
             id = uuid
@@ -170,27 +147,21 @@ struct Park: Identifiable, Hashable, Decodable {
         state = try container.decode(String.self, forKey: .state)
         city = try container.decode(String.self, forKey: .city)
 
-        // Handle legacy rating field or family_rating
         let legacyRating = try container.decodeIfPresent(Double.self, forKey: .rating)
         familyRating = try container.decodeIfPresent(Double.self, forKey: .familyRating) ?? legacyRating ?? 0
         
-        // Community rating is optional
         communityRating = try container.decodeIfPresent(Double.self, forKey: .communityRating)
         
-        // Review counts default to 0
         familyReviewCount = try container.decodeIfPresent(Int.self, forKey: .familyReviewCount) ?? 0
         communityReviewCount = try container.decodeIfPresent(Int.self, forKey: .communityReviewCount) ?? 0
 
-        // Description defaults to empty string
         description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
         
-        // Memberships - handle empty arrays
-        memberships = (try? container.decode([Membership].self, forKey: .memberships)) ?? []
+        let membershipStrings = (try? container.decode([String].self, forKey: .memberships)) ?? []
+        memberships = membershipStrings.map { Membership(name: $0) }
         
-        // Amenities - handle empty arrays
         amenities = (try? container.decode([Amenity].self, forKey: .amenities)) ?? []
         
-        // Featured notes - handle empty arrays
         featuredNotes = (try? container.decode([String].self, forKey: .featuredNotes)) ?? []
         
         print("✅ Successfully decoded park: \(name) in \(city), \(state)")
@@ -206,7 +177,7 @@ struct Park: Identifiable, Hashable, Decodable {
             familyReviewCount: 12,
             communityReviewCount: 64,
             description: "Nestled right along the Guadalupe River, Riverbend Retreat offers oversized pull-through sites, shade from towering pecan trees, and quick access to tubing outfitters.",
-            memberships: [.thousandTrails, .harvestHosts],
+            memberships: [Membership(name: "Thousand Trails"), Membership(name: "Harvest Hosts")],
             amenities: [
                 Amenity(name: "50 AMP Full Hookups", systemImage: "bolt.fill"),
                 Amenity(name: "River Access", systemImage: "drop.fill"),
@@ -227,7 +198,7 @@ struct Park: Identifiable, Hashable, Decodable {
             familyReviewCount: 9,
             communityReviewCount: 38,
             description: "Wake up to red rock views and be minutes away from both Arches and Canyonlands National Parks. Juniper Ridge balances rustic desert vibes with modern amenities.",
-            memberships: [.koa, .passportAmerica],
+            memberships: [Membership(name: "KOA"), Membership(name: "Passport America")],
             amenities: [
                 Amenity(name: "Adventure Concierge", systemImage: "figure.hiking"),
                 Amenity(name: "Camp Store", systemImage: "bag.fill"),
@@ -247,7 +218,7 @@ struct Park: Identifiable, Hashable, Decodable {
             familyReviewCount: 7,
             communityReviewCount: 22,
             description: "A pine-canopied hideaway with waterfront sites on Icicle Creek. This stop is perfect for quiet mornings, paddle boarding, and quick trips into Bavarian downtown.",
-            memberships: [.thousandTrails, .independent],
+            memberships: [Membership(name: "Thousand Trails"), Membership(name: "Independent")],
             amenities: [
                 Amenity(name: "Creekside Kayak Launch", systemImage: "sailboat.fill"),
                 Amenity(name: "Laundry Cottage", systemImage: "washer"),
@@ -267,7 +238,7 @@ struct Park: Identifiable, Hashable, Decodable {
             familyReviewCount: 16,
             communityReviewCount: 71,
             description: "Perched above the red rocks, Sunset Mesa delivers panoramic sunsets, curated wellness programming, and easy day trips into uptown Sedona.",
-            memberships: [.harvestHosts, .independent],
+            memberships: [Membership(name: "Harvest Hosts"), Membership(name: "Independent")],
             amenities: [
                 Amenity(name: "On-Site Trailheads", systemImage: "leaf.fill"),
                 Amenity(name: "Wellness Yurts", systemImage: "figure.mind.and.body"),
