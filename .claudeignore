@@ -1,0 +1,12 @@
+# Ignore large/binary files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.mov
+*.zip
+.git/
+.DS_Store
+vendor/
+node_modules/
