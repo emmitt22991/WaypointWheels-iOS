@@ -147,13 +147,13 @@ struct Park: Identifiable, Hashable, Decodable {
         state = try container.decode(String.self, forKey: .state)
         city = try container.decode(String.self, forKey: .city)
 
-        let legacyRating = try container.decodeIfPresent(Double.self, forKey: .rating)
-        familyRating = try container.decodeIfPresent(Double.self, forKey: .familyRating) ?? legacyRating ?? 0
-        
-        communityRating = try container.decodeIfPresent(Double.self, forKey: .communityRating)
-        
-        familyReviewCount = try container.decodeIfPresent(Int.self, forKey: .familyReviewCount) ?? 0
-        communityReviewCount = try container.decodeIfPresent(Int.self, forKey: .communityReviewCount) ?? 0
+        let legacyRating = container.decodeFlexibleDouble(forKey: .rating)
+        familyRating = container.decodeFlexibleDouble(forKey: .familyRating) ?? legacyRating ?? 0
+
+        communityRating = container.decodeFlexibleDouble(forKey: .communityRating)
+
+        familyReviewCount = container.decodeFlexibleInt(forKey: .familyReviewCount) ?? 0
+        communityReviewCount = container.decodeFlexibleInt(forKey: .communityReviewCount) ?? 0
 
         description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
         
