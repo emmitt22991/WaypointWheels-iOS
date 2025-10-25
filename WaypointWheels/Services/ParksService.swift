@@ -23,8 +23,6 @@ enum ParksServiceError: Error, LocalizedError {
     }
 }
 
-
-
 @MainActor
 final class ParksService {
     private let baseURL: String
@@ -102,53 +100,162 @@ final class ParksService {
     }
     
     func submitRating(parkID: UUID, rating: Double) async throws -> Park {
-        // TODO: Implement actual API call
-        try await Task.sleep(nanoseconds: 1_000_000_000)
+        let urlString = "\(baseURL)/parks/ratings.php"
+        guard let url = URL(string: urlString) else {
+            throw ParksServiceError.invalidURL
+        }
         
-        // Return mock updated park
-        return Park(
-            id: parkID,
-            name: "Mock Park",
-            state: "CA",
-            city: "Test City",
-            familyRating: rating,
-            communityRating: rating,
-            familyReviewCount: 1,
-            communityReviewCount: 1,
-            description: "",
-            memberships: [],
-            amenities: [],
-            featuredNotes: []
-        )
+        let payload: [String: Any] = [
+            "park_id": parkID.uuidString,
+            "rating": rating,
+            "contact_id": 1 // TODO: Get from authentication
+        ]
+        
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: payload) else {
+            throw ParksServiceError.invalidResponse
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = jsonData
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw ParksServiceError.invalidResponse
+            }
+            
+            guard httpResponse.statusCode == 200 else {
+                if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                    throw ParksServiceError.serverError(errorResponse.message ?? errorResponse.error)
+                }
+                throw ParksServiceError.serverError("HTTP \(httpResponse.statusCode)")
+            }
+            
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            
+            let park = try decoder.decode(Park.self, from: data)
+            return park
+            
+        } catch let error as ParksServiceError {
+            throw error
+        } catch {
+            throw ParksServiceError.networkError(error)
+        }
     }
     
     func submitReview(parkID: UUID, rating: Double, comment: String) async throws -> ParkDetail.Review {
-        // TODO: Implement actual API call
-        try await Task.sleep(nanoseconds: 1_000_000_000)
+        let urlString = "\(baseURL)/parks/reviews.php"
+        guard let url = URL(string: urlString) else {
+            throw ParksServiceError.invalidURL
+        }
         
-        // Return mock review
-        return ParkDetail.Review(
-            id: UUID(),
-            authorName: "You",
-            rating: rating,
-            comment: comment,
-            createdAt: Date(),
-            isFamilyReview: true
-        )
+        let payload: [String: Any] = [
+            "park_id": parkID.uuidString,
+            "rating": rating,
+            "comment": comment,
+            "contact_id": 1 // TODO: Get from authentication
+        ]
+        
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: payload) else {
+            throw ParksServiceError.invalidResponse
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = jsonData
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw ParksServiceError.invalidResponse
+            }
+            
+            guard httpResponse.statusCode == 201 || httpResponse.statusCode == 200 else {
+                if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+                    throw ParksServiceError.serverError(errorResponse.message ?? errorResponse.error)
+                }
+                throw ParksServiceError.serverError("HTTP \(httpResponse.statusCode)")
+            }
+            
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            
+            let review = try decoder.decode(ParkDetail.Review.self, from: data)
+            return review
+            
+        } catch let error as ParksServiceError {
+            throw error
+        } catch {
+            throw ParksServiceError.networkError(error)
+        }
     }
     
     func uploadPhoto(parkID: UUID, data: Data, filename: String, caption: String?) async throws -> ParkDetail.Photo {
-        // TODO: Implement actual API call
-        try await Task.sleep(nanoseconds: 1_000_000_000)
+        let urlString = "\(baseURL)/parks/photos.php"
+        guard let url = URL(string: urlString) else {
+            throw ParksServiceError.invalidURL
+        }
         
-        // Return mock photo
-        return ParkDetail.Photo(
-            id: UUID(),
-            imageURL: URL(string: "https://via.placeholder.com/300")!,
-            caption: caption,
-            uploadedBy: "You",
-            isFamilyPhoto: true
-        )
+        // Create multipart form data
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var body = Data()
+        
+        // Add park_id
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"park_id\"\r\n\r\n".data(using: .utf8)!)
+        body.append("\(parkID.uuidString)\r\n".data(using: .utf8)!)
+        
+        // Add caption if provided
+        if let caption = caption, !caption.isEmpty {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"caption\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(caption)\r\n".data(using: .utf8)!)
+        }
+        
+        // Add photo data
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"photo\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n".data(using: .utf8)!)
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        
+        do {
+            let (responseData, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw ParksServiceError.invalidResponse
+            }
+            
+            guard httpResponse.statusCode == 201 || httpResponse.statusCode == 200 else {
+                if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: responseData) {
+                    throw ParksServiceError.serverError(errorResponse.message ?? errorResponse.error)
+                }
+                throw ParksServiceError.serverError("HTTP \(httpResponse.statusCode)")
+            }
+            
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            
+            let photo = try decoder.decode(ParkDetail.Photo.self, from: responseData)
+            return photo
+            
+        } catch let error as ParksServiceError {
+            throw error
+        } catch {
+            throw ParksServiceError.networkError(error)
+        }
     }
 }
 
