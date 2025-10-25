@@ -64,7 +64,7 @@ struct ParkDetail: Decodable {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             id = try container.decode(UUID.self, forKey: .id)
             authorName = try container.decode(String.self, forKey: .authorName)
-            rating = try container.decode(Double.self, forKey: .rating)
+            rating = container.decodeFlexibleDouble(forKey: .rating) ?? 0
             comment = try container.decode(String.self, forKey: .comment)
             let dateString = try container.decode(String.self, forKey: .createdAt)
             createdAt = ISO8601DateFormatter.cachedFormatter.date(from: dateString) ?? Date()
@@ -147,7 +147,7 @@ struct ParkDetail: Decodable {
             communityReviews = legacyReviews.filter { !$0.isFamilyReview }
         }
 
-        userRating = try container.decodeIfPresent(Double.self, forKey: .userRating)
+        userRating = container.decodeFlexibleDouble(forKey: .userRating)
         userReview = try container.decodeIfPresent(Review.self, forKey: .userReview)
     }
 
