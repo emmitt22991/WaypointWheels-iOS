@@ -18,7 +18,15 @@ struct ParkDetail: Decodable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            id = try container.decode(UUID.self, forKey: .id)
+            
+            // Handle UUID as string
+            if let idString = try? container.decode(String.self, forKey: .id),
+               let uuid = UUID(uuidString: idString) {
+                id = uuid
+            } else {
+                id = try container.decode(UUID.self, forKey: .id)
+            }
+            
             imageURL = try container.decode(URL.self, forKey: .imageURL)
             caption = try container.decodeIfPresent(String.self, forKey: .caption)
             uploadedBy = try container.decodeIfPresent(String.self, forKey: .uploadedBy)
@@ -62,13 +70,40 @@ struct ParkDetail: Decodable {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            id = try container.decode(UUID.self, forKey: .id)
+            
+            // CRITICAL FIX: Handle UUID as string (from JSON) or native UUID
+            if let idString = try? container.decode(String.self, forKey: .id),
+               let uuid = UUID(uuidString: idString) {
+                id = uuid
+                print("✅ Successfully decoded review UUID from string: \(idString)")
+            } else if let uuid = try? container.decode(UUID.self, forKey: .id) {
+                id = uuid
+                print("✅ Successfully decoded review UUID directly")
+            } else {
+                print("❌ Failed to decode review ID, generating new UUID")
+                id = UUID()
+            }
+            
             authorName = try container.decode(String.self, forKey: .authorName)
+            
+            // Handle rating as either Int or Double
             rating = container.decodeFlexibleDouble(forKey: .rating) ?? 0
+            
             comment = try container.decode(String.self, forKey: .comment)
+            
+            // Parse date string with ISO8601 formatter
             let dateString = try container.decode(String.self, forKey: .createdAt)
-            createdAt = ISO8601DateFormatter.cachedFormatter.date(from: dateString) ?? Date()
+            if let date = ISO8601DateFormatter.cachedFormatter.date(from: dateString) {
+                createdAt = date
+                print("✅ Successfully parsed date: \(dateString)")
+            } else {
+                print("⚠️ Failed to parse date: \(dateString), using current date")
+                createdAt = Date()
+            }
+            
             isFamilyReview = try container.decodeIfPresent(Bool.self, forKey: .isFamilyReview) ?? false
+            
+            print("✅ Successfully decoded review: ID=\(id), author=\(authorName), rating=\(rating)")
         }
 
         var formattedDate: String {
@@ -122,7 +157,11 @@ struct ParkDetail: Decodable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        print("🔍 Decoding ParkDetail...")
+        
         summary = try container.decode(Park.self, forKey: .summary)
+        print("✅ Decoded park summary: \(summary.name)")
 
         let legacyPhotos = try container.decodeIfPresent([Photo].self, forKey: .photos) ?? []
         familyPhotos = try container.decodeIfPresent([Photo].self, forKey: .familyPhotos) ?? legacyPhotos.filter { $0.isFamilyPhoto }
@@ -133,22 +172,50 @@ struct ParkDetail: Decodable {
         } else {
             communityPhotos = legacyPhotos.filter { !$0.isFamilyPhoto }
         }
+        print("✅ Decoded photos: \(familyPhotos.count) family, \(communityPhotos.count) community")
 
         amenities = try container.decode([Park.Amenity].self, forKey: .amenities)
         notes = try container.decode([String].self, forKey: .notes)
+        print("✅ Decoded amenities: \(amenities.count), notes: \(notes.count)")
 
+        // CRITICAL FIX: Add detailed logging for review decoding
+        print("🔍 Attempting to decode reviews...")
+        
         let legacyReviews = try container.decodeIfPresent([Review].self, forKey: .reviews) ?? []
-        familyReviews = try container.decodeIfPresent([Review].self, forKey: .familyReviews) ?? legacyReviews.filter { $0.isFamilyReview }
-        if let explicitCommunityReviews = try container.decodeIfPresent([Review].self, forKey: .communityReviews) {
+        print("   - Legacy reviews: \(legacyReviews.count)")
+        
+        // Try to decode family_reviews with error handling
+        if let familyReviewsArray = try? container.decode([Review].self, forKey: .familyReviews) {
+            familyReviews = familyReviewsArray
+            print("✅ Successfully decoded \(familyReviews.count) family reviews")
+        } else {
+            print("⚠️ Failed to decode family_reviews, using legacy filter")
+            familyReviews = legacyReviews.filter { $0.isFamilyReview }
+        }
+        
+        // Try to decode community_reviews with error handling
+        if let explicitCommunityReviews = try? container.decode([Review].self, forKey: .communityReviews) {
             communityReviews = explicitCommunityReviews
+            print("✅ Successfully decoded \(communityReviews.count) community reviews")
         } else if familyReviews.isEmpty {
             communityReviews = legacyReviews
+            print("   - Using legacy reviews as community reviews")
         } else {
             communityReviews = legacyReviews.filter { !$0.isFamilyReview }
+            print("   - Using filtered legacy reviews as community reviews")
         }
+        
+        print("✅ Final review counts: family=\(familyReviews.count), community=\(communityReviews.count)")
 
         userRating = container.decodeFlexibleDouble(forKey: .userRating)
         userReview = try container.decodeIfPresent(Review.self, forKey: .userReview)
+        
+        if let userRating = userRating {
+            print("✅ User rating: \(userRating)")
+        }
+        if userReview != nil {
+            print("✅ User has submitted a review")
+        }
     }
 
     var orderedPhotos: [Photo] { familyPhotos + communityPhotos }
