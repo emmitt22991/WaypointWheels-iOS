@@ -19,18 +19,26 @@ struct ParkDetail: Decodable {
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             
-            // Handle UUID as string
+            // CRITICAL FIX: Decode UUID from string, just like Park does
+            // The JSON has id as a string, not a native UUID type
             if let idString = try? container.decode(String.self, forKey: .id),
                let uuid = UUID(uuidString: idString) {
                 id = uuid
+                print("✅ Decoded photo ID from string: \(idString)")
+            } else if let uuid = try? container.decode(UUID.self, forKey: .id) {
+                id = uuid
+                print("✅ Decoded photo ID as UUID directly")
             } else {
-                id = try container.decode(UUID.self, forKey: .id)
+                print("⚠️ Failed to decode photo ID, generating new UUID")
+                id = UUID()
             }
             
             imageURL = try container.decode(URL.self, forKey: .imageURL)
             caption = try container.decodeIfPresent(String.self, forKey: .caption)
             uploadedBy = try container.decodeIfPresent(String.self, forKey: .uploadedBy)
             isFamilyPhoto = try container.decodeIfPresent(Bool.self, forKey: .isFamilyPhoto) ?? false
+            
+            print("✅ Successfully decoded photo: \(imageURL)")
         }
 
         init(id: UUID, imageURL: URL, caption: String?, uploadedBy: String?, isFamilyPhoto: Bool) {
@@ -71,39 +79,43 @@ struct ParkDetail: Decodable {
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             
-            // CRITICAL FIX: Handle UUID as string (from JSON) or native UUID
+            // CRITICAL FIX: Decode UUID from string, just like Park does
+            // The JSON has id as a string, not a native UUID type
             if let idString = try? container.decode(String.self, forKey: .id),
                let uuid = UUID(uuidString: idString) {
                 id = uuid
-                print("✅ Successfully decoded review UUID from string: \(idString)")
+                print("✅ Decoded review ID from string: \(idString)")
             } else if let uuid = try? container.decode(UUID.self, forKey: .id) {
                 id = uuid
-                print("✅ Successfully decoded review UUID directly")
+                print("✅ Decoded review ID as UUID directly")
             } else {
-                print("❌ Failed to decode review ID, generating new UUID")
+                print("⚠️ Failed to decode review ID, generating new UUID")
                 id = UUID()
             }
             
             authorName = try container.decode(String.self, forKey: .authorName)
+            print("✅ Decoded review author: \(authorName)")
             
-            // Handle rating as either Int or Double
             rating = container.decodeFlexibleDouble(forKey: .rating) ?? 0
+            print("✅ Decoded review rating: \(rating)")
             
             comment = try container.decode(String.self, forKey: .comment)
+            print("✅ Decoded review comment (length: \(comment.count))")
             
-            // Parse date string with ISO8601 formatter
             let dateString = try container.decode(String.self, forKey: .createdAt)
-            if let date = ISO8601DateFormatter.cachedFormatter.date(from: dateString) {
-                createdAt = date
-                print("✅ Successfully parsed date: \(dateString)")
+            print("✅ Decoded date string: \(dateString)")
+            
+            if let parsedDate = ISO8601DateFormatter.cachedFormatter.date(from: dateString) {
+                createdAt = parsedDate
+                print("✅ Successfully parsed date: \(parsedDate)")
             } else {
-                print("⚠️ Failed to parse date: \(dateString), using current date")
                 createdAt = Date()
+                print("⚠️ Failed to parse date '\(dateString)', using current date")
             }
             
             isFamilyReview = try container.decodeIfPresent(Bool.self, forKey: .isFamilyReview) ?? false
-            
-            print("✅ Successfully decoded review: ID=\(id), author=\(authorName), rating=\(rating)")
+            print("✅ Decoded is_family_review: \(isFamilyReview)")
+            print("✅ Successfully decoded complete review for: \(authorName)")
         }
 
         var formattedDate: String {
@@ -158,12 +170,14 @@ struct ParkDetail: Decodable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
-        print("🔍 Decoding ParkDetail...")
+        print("🔍 Starting ParkDetail decoding...")
         
         summary = try container.decode(Park.self, forKey: .summary)
         print("✅ Decoded park summary: \(summary.name)")
 
         let legacyPhotos = try container.decodeIfPresent([Photo].self, forKey: .photos) ?? []
+        print("📸 Legacy photos: \(legacyPhotos.count)")
+        
         familyPhotos = try container.decodeIfPresent([Photo].self, forKey: .familyPhotos) ?? legacyPhotos.filter { $0.isFamilyPhoto }
         if let explicitCommunityPhotos = try container.decodeIfPresent([Photo].self, forKey: .communityPhotos) {
             communityPhotos = explicitCommunityPhotos
@@ -178,31 +192,71 @@ struct ParkDetail: Decodable {
         notes = try container.decode([String].self, forKey: .notes)
         print("✅ Decoded amenities: \(amenities.count), notes: \(notes.count)")
 
-        // CRITICAL FIX: Add detailed logging for review decoding
         print("🔍 Attempting to decode reviews...")
         
         let legacyReviews = try container.decodeIfPresent([Review].self, forKey: .reviews) ?? []
-        print("   - Legacy reviews: \(legacyReviews.count)")
+        print("  - Legacy reviews: \(legacyReviews.count)")
         
-        // Try to decode family_reviews with error handling
-        if let familyReviewsArray = try? container.decode([Review].self, forKey: .familyReviews) {
-            familyReviews = familyReviewsArray
-            print("✅ Successfully decoded \(familyReviews.count) family reviews")
-        } else {
-            print("⚠️ Failed to decode family_reviews, using legacy filter")
+        // CRITICAL: Use try instead of decodeIfPresent to get the actual error
+        // decodeIfPresent silently returns nil when array decode fails
+        do {
+            // First check if the key exists
+            if container.contains(.familyReviews) {
+                print("  - family_reviews key EXISTS in JSON")
+                // Now try to decode it and catch the actual error
+                let decodedFamilyReviews = try container.decode([Review].self, forKey: .familyReviews)
+                familyReviews = decodedFamilyReviews
+                print("✅ Successfully decoded family_reviews: \(familyReviews.count) reviews")
+            } else {
+                print("  - family_reviews key MISSING from JSON")
+                familyReviews = legacyReviews.filter { $0.isFamilyReview }
+                print("  - Using legacy filter: \(familyReviews.count) reviews")
+            }
+        } catch let decodingError as DecodingError {
+            print("❌ DECODE ERROR for family_reviews:")
+            switch decodingError {
+            case .keyNotFound(let key, let context):
+                print("  - Key not found: \(key)")
+                print("  - Context: \(context.debugDescription)")
+                print("  - Coding path: \(context.codingPath.map { $0.stringValue }.joined(separator: " -> "))")
+            case .typeMismatch(let type, let context):
+                print("  - Type mismatch: expected \(type)")
+                print("  - Context: \(context.debugDescription)")
+                print("  - Coding path: \(context.codingPath.map { $0.stringValue }.joined(separator: " -> "))")
+                print("  - Underlying error: \(String(describing: context.underlyingError))")
+            case .valueNotFound(let type, let context):
+                print("  - Value not found: \(type)")
+                print("  - Context: \(context.debugDescription)")
+                print("  - Coding path: \(context.codingPath.map { $0.stringValue }.joined(separator: " -> "))")
+            case .dataCorrupted(let context):
+                print("  - Data corrupted")
+                print("  - Context: \(context.debugDescription)")
+                print("  - Coding path: \(context.codingPath.map { $0.stringValue }.joined(separator: " -> "))")
+                print("  - Underlying error: \(String(describing: context.underlyingError))")
+            @unknown default:
+                print("  - Unknown decoding error: \(decodingError)")
+            }
+            // Fall back to legacy filter
             familyReviews = legacyReviews.filter { $0.isFamilyReview }
+            print("  - Falling back to legacy filter: \(familyReviews.count) reviews")
+        } catch {
+            print("❌ NON-DECODING ERROR for family_reviews: \(error)")
+            print("  - Error type: \(type(of: error))")
+            print("  - Error description: \(error.localizedDescription)")
+            familyReviews = legacyReviews.filter { $0.isFamilyReview }
+            print("  - Falling back to legacy filter: \(familyReviews.count) reviews")
         }
         
-        // Try to decode community_reviews with error handling
-        if let explicitCommunityReviews = try? container.decode([Review].self, forKey: .communityReviews) {
+        // Try to decode community_reviews
+        if let explicitCommunityReviews = try container.decodeIfPresent([Review].self, forKey: .communityReviews) {
             communityReviews = explicitCommunityReviews
-            print("✅ Successfully decoded \(communityReviews.count) community reviews")
+            print("✅ Successfully decoded community_reviews: \(communityReviews.count) reviews")
         } else if familyReviews.isEmpty {
             communityReviews = legacyReviews
-            print("   - Using legacy reviews as community reviews")
+            print("  - Using legacy reviews as community reviews: \(communityReviews.count)")
         } else {
             communityReviews = legacyReviews.filter { !$0.isFamilyReview }
-            print("   - Using filtered legacy reviews as community reviews")
+            print("  - Filtered legacy for community reviews: \(communityReviews.count)")
         }
         
         print("✅ Final review counts: family=\(familyReviews.count), community=\(communityReviews.count)")
@@ -211,11 +265,13 @@ struct ParkDetail: Decodable {
         userReview = try container.decodeIfPresent(Review.self, forKey: .userReview)
         
         if let userRating = userRating {
-            print("✅ User rating: \(userRating)")
+            print("✅ User has rating: \(userRating)")
         }
         if userReview != nil {
-            print("✅ User has submitted a review")
+            print("✅ User has review")
         }
+        
+        print("✅ ParkDetail decoding complete!")
     }
 
     var orderedPhotos: [Photo] { familyPhotos + communityPhotos }

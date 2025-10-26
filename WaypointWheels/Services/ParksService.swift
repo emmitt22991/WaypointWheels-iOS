@@ -52,7 +52,6 @@ final class ParksService {
             }
             
             let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
             
             let parks = try decoder.decode([Park].self, from: data)
             return parks
@@ -85,7 +84,6 @@ final class ParksService {
             }
             
             let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
             
             let detail = try decoder.decode(ParkDetail.self, from: data)
             return detail
@@ -135,7 +133,6 @@ final class ParksService {
             }
             
             let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
             
             let park = try decoder.decode(Park.self, from: data)
             return park
@@ -184,7 +181,6 @@ final class ParksService {
             }
             
             let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
             
             let review = try decoder.decode(ParkDetail.Review.self, from: data)
             return review
@@ -246,7 +242,6 @@ final class ParksService {
             }
             
             let decoder = JSONDecoder()
-            decoder.keyDecodingStrategy = .convertFromSnakeCase
             
             let photo = try decoder.decode(ParkDetail.Photo.self, from: responseData)
             return photo
