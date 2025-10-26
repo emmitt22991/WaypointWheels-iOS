@@ -101,14 +101,14 @@ struct ParksView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(
-                            viewModel.selectedFilter.displayName != "All Memberships" 
-                                ? Color.orange.opacity(0.15) 
+                            viewModel.selectedFilter.displayName != "All Memberships"
+                                ? Color.orange.opacity(0.15)
                                 : Color(.systemGray5),
                             in: Capsule()
                         )
                         .foregroundColor(
-                            viewModel.selectedFilter.displayName != "All Memberships" 
-                                ? .orange 
+                            viewModel.selectedFilter.displayName != "All Memberships"
+                                ? .orange
                                 : .secondary
                         )
                     }
@@ -130,14 +130,14 @@ struct ParksView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(
-                            viewModel.selectedState != nil 
-                                ? Color.green.opacity(0.15) 
+                            viewModel.selectedState != nil
+                                ? Color.green.opacity(0.15)
                                 : Color(.systemGray5),
                             in: Capsule()
                         )
                         .foregroundColor(
-                            viewModel.selectedState != nil 
-                                ? .green 
+                            viewModel.selectedState != nil
+                                ? .green
                                 : .secondary
                         )
                     }
@@ -148,27 +148,27 @@ struct ParksView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: viewModel.showFamilyFavoritesOnly ? "star.fill" : "star")
-                            Text("4★+")
+                            Text("4â˜…+")
                         }
                         .font(.subheadline)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(
-                            viewModel.showFamilyFavoritesOnly 
-                                ? Color.yellow.opacity(0.25) 
+                            viewModel.showFamilyFavoritesOnly
+                                ? Color.yellow.opacity(0.25)
                                 : Color(.systemGray5),
                             in: Capsule()
                         )
                         .foregroundColor(
-                            viewModel.showFamilyFavoritesOnly 
-                                ? Color(red: 0.36, green: 0.31, blue: 0.55) 
+                            viewModel.showFamilyFavoritesOnly
+                                ? Color(red: 0.36, green: 0.31, blue: 0.55)
                                 : .secondary
                         )
                     }
                     
                     // Reset filters button
-                    if viewModel.selectedFilter.displayName != "All Memberships" || 
-                       viewModel.selectedState != nil || 
+                    if viewModel.selectedFilter.displayName != "All Memberships" ||
+                       viewModel.selectedState != nil ||
                        viewModel.showFamilyFavoritesOnly {
                         Button {
                             viewModel.selectedFilter = .all
@@ -213,14 +213,12 @@ struct ParksView: View {
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.filteredParks) { park in
                         NavigationLink {
-                            let parksService = ParksService()
-                            let detailViewModel = ParkDetailViewModel(
+                            ParkDetailView(
                                 parkID: park.id,
                                 initialSummary: park,
-                                service: parksService,
+                                service: ParksService(),
                                 onParkUpdated: { _ in }
                             )
-                            ParkDetailView(viewModel: detailViewModel)
                         } label: {
                             ParkTableRow(park: park)
                         }
@@ -409,7 +407,7 @@ struct ParkTableRow: View {
                 .padding(.horizontal, 6)
                 .background(Color(red: 0.94, green: 0.90, blue: 0.99).opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
             } else {
-                Text("—")
+                Text("â€”")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .frame(width: 60)

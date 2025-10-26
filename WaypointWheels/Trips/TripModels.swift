@@ -1,6 +1,122 @@
 import Foundation
 import MapKit
 
+// MARK: - Current Location Model
+
+/// Represents the user's current location/stay
+struct CurrentLocation: Decodable, Equatable {
+    let parkId: Int
+    let parkUuid: UUID
+    let parkName: String
+    let description: String
+    let arrivalDate: String?
+    let departureDate: String?
+    let coordinate: CLLocationCoordinate2D
+    
+    init(parkId: Int,
+         parkUuid: UUID,
+         parkName: String,
+         description: String,
+         arrivalDate: String?,
+         departureDate: String?,
+         coordinate: CLLocationCoordinate2D) {
+        self.parkId = parkId
+        self.parkUuid = parkUuid
+        self.parkName = parkName
+        self.description = description
+        self.arrivalDate = arrivalDate
+        self.departureDate = departureDate
+        self.coordinate = coordinate
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        parkId = try container.decode(Int.self, forKey: .parkId)
+        
+        // Decode UUID from string
+        if let uuidString = try? container.decode(String.self, forKey: .parkUuid),
+           let uuid = UUID(uuidString: uuidString) {
+            parkUuid = uuid
+        } else if let uuid = try? container.decode(UUID.self, forKey: .parkUuid) {
+            parkUuid = uuid
+        } else {
+            // Fallback: generate UUID from park ID (should match backend)
+            parkUuid = UUID()
+            print("⚠️ Failed to decode park UUID for current location")
+        }
+        
+        parkName = try container.decode(String.self, forKey: .parkName)
+        description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
+        arrivalDate = try container.decodeIfPresent(String.self, forKey: .arrivalDate)
+        departureDate = try container.decodeIfPresent(String.self, forKey: .departureDate)
+        
+        // Decode coordinate
+        if let coordinateDTO = try? container.decode(TripLocation.CoordinateDTO.self, forKey: .coordinate) {
+            coordinate = CLLocationCoordinate2D(
+                latitude: coordinateDTO.latitude,
+                longitude: coordinateDTO.longitude
+            )
+        } else {
+            // Fallback if coordinate structure is different
+            coordinate = CLLocationCoordinate2D(latitude: 0, longitude: 0)
+        }
+    }
+    
+    /// Format the date range for display
+    var dateRangeDisplay: String {
+        guard let arrival = arrivalDate else { return "Current location" }
+        
+        if let departure = departureDate {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            
+            if let arrivalDate = formatter.date(from: arrival),
+               let departureDate = formatter.date(from: departure) {
+                formatter.dateFormat = "MMM d"
+                let arrivalStr = formatter.string(from: arrivalDate)
+                let departureStr = formatter.string(from: departureDate)
+                
+                if arrivalStr == departureStr {
+                    return arrivalStr
+                }
+                return "\(arrivalStr) – \(departureStr)"
+            }
+        }
+        
+        // Just show arrival if we have it
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        if let arrivalDate = formatter.date(from: arrival) {
+            formatter.dateFormat = "MMM d"
+            return "Since " + formatter.string(from: arrivalDate)
+        }
+        
+        return "Current location"
+    }
+    
+    static func == (lhs: CurrentLocation, rhs: CurrentLocation) -> Bool {
+        return lhs.parkId == rhs.parkId &&
+               lhs.parkUuid == rhs.parkUuid &&
+               lhs.parkName == rhs.parkName &&
+               lhs.description == rhs.description &&
+               lhs.arrivalDate == rhs.arrivalDate &&
+               lhs.departureDate == rhs.departureDate
+    }
+    
+    private enum CodingKeys: String, CodingKey {
+        case parkId = "park_id"
+        case parkUuid = "park_uuid"
+        case parkName = "park_name"
+        case description
+        case arrivalDate = "arrival_date"
+        case departureDate = "departure_date"
+        case coordinate
+    }
+}
+
+// MARK: - Trip Location Model
+
 struct TripLocation: Identifiable, Hashable, Decodable {
     struct CoordinateDTO: Decodable {
         let latitude: Double
@@ -100,6 +216,8 @@ private extension TripLocation {
     }
 }
 
+// MARK: - Trip Leg Model
+
 struct TripLeg: Identifiable, Hashable, Decodable {
     let id: String
     let dayLabel: String
@@ -110,6 +228,7 @@ struct TripLeg: Identifiable, Hashable, Decodable {
     let estimatedDriveTime: String
     let highlights: [String]
     let notes: String?
+    let isFromCurrentLocation: Bool
 
     init(id: String,
          dayLabel: String,
@@ -119,7 +238,8 @@ struct TripLeg: Identifiable, Hashable, Decodable {
          distanceInMiles: Double,
          estimatedDriveTime: String,
          highlights: [String],
-         notes: String?) {
+         notes: String?,
+         isFromCurrentLocation: Bool = false) {
         self.id = id
         self.dayLabel = dayLabel
         self.dateRangeDescription = dateRangeDescription
@@ -129,6 +249,7 @@ struct TripLeg: Identifiable, Hashable, Decodable {
         self.estimatedDriveTime = estimatedDriveTime
         self.highlights = highlights
         self.notes = notes
+        self.isFromCurrentLocation = isFromCurrentLocation
     }
 
     init(from decoder: Decoder) throws {
@@ -138,6 +259,8 @@ struct TripLeg: Identifiable, Hashable, Decodable {
         dateRangeDescription = try container.decode(String.self, forKey: .dateRangeDescription)
         start = try container.decode(TripLocation.self, forKey: .start)
         end = try container.decode(TripLocation.self, forKey: .end)
+        
+        // Handle distance as either Double or String
         if let doubleValue = try? container.decode(Double.self, forKey: .distanceInMiles) {
             distanceInMiles = doubleValue
         } else if let raw = try? container.decode(String.self, forKey: .distanceInMiles),
@@ -150,14 +273,19 @@ struct TripLeg: Identifiable, Hashable, Decodable {
                 debugDescription: "Unable to decode distance_in_miles as Double or numeric String"
             )
         }
+        
         estimatedDriveTime = try container.decode(String.self, forKey: .estimatedDriveTime)
+        
+        // Handle highlights as either array or string
         if let highlightArray = try? container.decode([String].self, forKey: .highlights) {
             highlights = highlightArray
         } else {
             let rawHighlights = try container.decode(String.self, forKey: .highlights)
             highlights = TripLeg.normalizeHighlights(from: rawHighlights)
         }
+        
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        isFromCurrentLocation = try container.decodeIfPresent(Bool.self, forKey: .isFromCurrentLocation) ?? false
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -170,6 +298,7 @@ struct TripLeg: Identifiable, Hashable, Decodable {
         case estimatedDriveTime = "estimated_drive_time"
         case highlights
         case notes
+        case isFromCurrentLocation = "is_from_current_location"
     }
 }
 
@@ -195,6 +324,8 @@ private extension TripLeg {
         return components.isEmpty ? [] : components
     }
 }
+
+// MARK: - Preview Data
 
 #if DEBUG
 extension TripLeg {
@@ -237,7 +368,7 @@ extension TripLeg {
         return [
             TripLeg(
                 id: "leg-1",
-                dayLabel: "Leg 1",
+                dayLabel: "Next Trip",
                 dateRangeDescription: "Mon · Apr 14",
                 start: newBraunfels,
                 end: austin,
@@ -248,11 +379,12 @@ extension TripLeg {
                     "Brunch stop at Magnolia Cafe",
                     "Evening stroll through Zilker Park"
                 ],
-                notes: "Austin is a quick drive — fuel up the night before."
+                notes: "Austin is a quick drive – fuel up the night before.",
+                isFromCurrentLocation: true
             ),
             TripLeg(
                 id: "leg-2",
-                dayLabel: "Leg 2",
+                dayLabel: "Travel Day",
                 dateRangeDescription: "Wed · Apr 16",
                 start: austin,
                 end: waco,
@@ -263,11 +395,11 @@ extension TripLeg {
                     "Tour the Waco Mammoth National Monument",
                     "Book sunset kayaking on the Brazos"
                 ],
-                notes: "Campground has limited shade — plan for awning setup."
+                notes: "Campground has limited shade – plan for awning setup."
             ),
             TripLeg(
                 id: "leg-3",
-                dayLabel: "Leg 3",
+                dayLabel: "Travel Day",
                 dateRangeDescription: "Sat · Apr 19",
                 start: waco,
                 end: dallas,
@@ -278,11 +410,11 @@ extension TripLeg {
                     "Set up bikes for the Katy Trail",
                     "Dinner reservation at Trinity Groves"
                 ],
-                notes: "Expect more traffic approaching Dallas — plan an early arrival."
+                notes: "Expect more traffic approaching Dallas – plan an early arrival."
             ),
             TripLeg(
                 id: "leg-4",
-                dayLabel: "Leg 4",
+                dayLabel: "Travel Day",
                 dateRangeDescription: "Tue · Apr 22",
                 start: dallas,
                 end: oklahomaCity,
@@ -293,9 +425,21 @@ extension TripLeg {
                     "Check in before 4:00 PM for full hookups",
                     "Tickets for the Cowboy Museum night tour"
                 ],
-                notes: "Longest drive of the route — confirm tire pressure before departure."
+                notes: "Longest drive of the route – confirm tire pressure before departure."
             )
         ]
     }()
+}
+
+extension CurrentLocation {
+    static let previewData = CurrentLocation(
+        parkId: 301,
+        parkUuid: UUID(uuidString: "0000012d-0000-4000-8000-0000473d8bc0")!, // Generated from parkId 301
+        parkName: "New Braunfels, TX",
+        description: "Campground Base",
+        arrivalDate: "2025-04-10",
+        departureDate: "2025-04-14",
+        coordinate: CLLocationCoordinate2D(latitude: 29.7030, longitude: -98.1245)
+    )
 }
 #endif

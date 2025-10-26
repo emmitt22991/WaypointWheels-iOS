@@ -12,6 +12,7 @@ struct TripsView: View {
 
     var body: some View {
         List {
+            // Trip Plan button
             Section {
                 NavigationLink {
                     TripPlanView(legs: viewModel.itinerary)
@@ -22,6 +23,17 @@ struct TripsView: View {
             }
             .textCase(nil)
 
+            // Current Location section (if available)
+            if let currentLocation = viewModel.currentLocation {
+                Section(header: Text("Current Location")) {
+                    CurrentLocationCard(location: currentLocation)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
+                .textCase(nil)
+            }
+
+            // Loading, error, or itinerary content
             if viewModel.isLoading {
                 loadingState
             } else if let errorMessage = viewModel.errorMessage {
@@ -30,7 +42,7 @@ struct TripsView: View {
                 emptyState
                     .listRowBackground(Color.clear)
             } else {
-                Section(header: Text("Itinerary")) {
+                Section(header: Text("Upcoming Trips")) {
                     ForEach(Array(viewModel.itinerary.enumerated()), id: \.element.id) { index, leg in
                         TimelineRow(
                             leg: leg,
@@ -169,6 +181,183 @@ struct TripsView: View {
     }
 }
 
+// MARK: - Current Location Card
+
+private struct CurrentLocationCard: View {
+    let location: CurrentLocation
+    
+    var body: some View {
+        NavigationLink {
+            makeDetailView()
+        } label: {
+            cardContent
+        }
+        .buttonStyle(.plain)
+    }
+    
+    // Create the detail view with proper initialization
+    @ViewBuilder
+    private func makeDetailView() -> some View {
+        let parksService = ParksService()
+        
+        // Create a minimal Park object for navigation
+        let minimalPark = Park(
+            id: location.parkUuid,
+            name: location.parkName,
+            state: Self.extractState(from: location.description),
+            city: Self.extractCity(from: location.description),
+            familyRating: 0.0, // Will be loaded by detail view
+            description: "",
+            memberships: [],
+            amenities: [],
+            featuredNotes: []
+        )
+        
+        let detailViewModel = ParkDetailViewModel(
+            parkID: location.parkUuid,
+            initialSummary: minimalPark,
+            service: parksService,
+            onParkUpdated: { _ in }
+        )
+        
+        ParkDetailView(viewModel: detailViewModel)
+    }
+    
+    private var cardContent: some View {
+        HStack(alignment: .top, spacing: 16) {
+            // Location icon
+            ZStack {
+                Circle()
+                    .fill(Color(red: 0.27, green: 0.64, blue: 0.56))
+                    .frame(width: 50, height: 50)
+                
+                Image(systemName: "location.fill")
+                    .font(.system(size: 24))
+                    .foregroundStyle(.white)
+            }
+            
+            VStack(alignment: .leading, spacing: 8) {
+                // "You are here" badge
+                Text("You are here")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color(red: 0.27, green: 0.64, blue: 0.56))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color(red: 0.27, green: 0.64, blue: 0.56).opacity(0.15))
+                    .clipShape(Capsule())
+                
+                // Park name
+                Text(location.parkName)
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+                
+                // Location description
+                if !location.description.isEmpty {
+                    Text(location.description)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                
+                // Date range
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(location.dateRangeDisplay)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                
+                // Departure date (if available)
+                if let departureDate = location.departureDate {
+                    Divider()
+                        .padding(.vertical, 4)
+                    
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.right.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
+                        Text("Departing: \(Self.formatDepartureDate(departureDate))")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                // "Tap to add photos & reviews" hint
+                HStack(spacing: 6) {
+                    Image(systemName: "camera.fill")
+                        .font(.caption2)
+                    Text("Tap to add photos & reviews")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                }
+                .foregroundStyle(Color(red: 0.27, green: 0.64, blue: 0.56))
+                .padding(.top, 4)
+            }
+            
+            Spacer()
+            
+            // Chevron indicator
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.tertiary)
+                .padding(.top, 8)
+        }
+        .padding(16)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color(red: 0.95, green: 0.99, blue: 0.98),
+                    Color.white
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color(red: 0.27, green: 0.64, blue: 0.56).opacity(0.3), lineWidth: 2)
+        )
+        .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
+        .padding(.vertical, 4)
+    }
+    
+    // MARK: - Helper Methods (Static)
+    
+    private static func formatDepartureDate(_ dateString: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        
+        guard let date = formatter.date(from: dateString) else {
+            return dateString
+        }
+        
+        formatter.dateFormat = "EEEE, MMMM d"
+        return formatter.string(from: date)
+    }
+    
+    // Helper to extract city from description like "Nashville, TN"
+    private static func extractCity(from description: String) -> String {
+        let parts = description.components(separatedBy: ",")
+        return parts.first?.trimmingCharacters(in: .whitespaces) ?? ""
+    }
+    
+    // Helper to extract state from description like "Nashville, TN"
+    private static func extractState(from description: String) -> String {
+        let parts = description.components(separatedBy: ",")
+        if parts.count > 1 {
+            return parts[1].trimmingCharacters(in: .whitespaces)
+        }
+        return ""
+    }
+}
+
+// MARK: - Timeline Row
+
 private struct TimelineRow: View {
     let leg: TripLeg
     let isFirst: Bool
@@ -176,9 +365,10 @@ private struct TimelineRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 20) {
+            // Timeline indicator
             VStack(spacing: 0) {
                 Circle()
-                    .fill(Color(red: 0.28, green: 0.23, blue: 0.52))
+                    .fill(circleColor)
                     .frame(width: 12, height: 12)
                     .overlay(
                         Circle()
@@ -195,20 +385,23 @@ private struct TimelineRow: View {
             .padding(.top, isFirst ? 6 : 0)
             .padding(.bottom, isLast ? 20 : 0)
 
+            // Trip leg content
             VStack(alignment: .leading, spacing: 8) {
+                // Day label and date
                 HStack(spacing: 10) {
                     Text(leg.dayLabel)
                         .font(.caption)
                         .fontWeight(.semibold)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(Color(red: 0.94, green: 0.89, blue: 0.99))
+                        .background(badgeColor)
                         .clipShape(Capsule())
                     Text(leg.dateRangeDescription)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
+                // Route
                 VStack(alignment: .leading, spacing: 6) {
                     Text("\(leg.start.name) → \(leg.end.name)")
                         .font(.headline)
@@ -217,6 +410,7 @@ private struct TimelineRow: View {
                         .foregroundStyle(.secondary)
                 }
 
+                // Highlights
                 if !leg.highlights.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(leg.highlights, id: \.self) { highlight in
@@ -233,6 +427,7 @@ private struct TimelineRow: View {
                     }
                 }
 
+                // Notes
                 if let notes = leg.notes {
                     Divider()
                         .padding(.vertical, 4)
@@ -242,15 +437,44 @@ private struct TimelineRow: View {
                 }
             }
             .padding(16)
-            .background(Color.white.opacity(0.92), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(cardBackgroundColor, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
         }
         .padding(.vertical, 8)
     }
+    
+    // Highlight the first trip (from current location) with a different color
+    private var circleColor: Color {
+        if leg.isFromCurrentLocation {
+            return Color(red: 0.27, green: 0.64, blue: 0.56) // Teal for next trip
+        }
+        return Color(red: 0.28, green: 0.23, blue: 0.52) // Purple for other trips
+    }
+    
+    private var badgeColor: Color {
+        if leg.isFromCurrentLocation {
+            return Color(red: 0.89, green: 0.98, blue: 0.96) // Light teal
+        }
+        return Color(red: 0.94, green: 0.89, blue: 0.99) // Light purple
+    }
+    
+    private var cardBackgroundColor: Color {
+        if leg.isFromCurrentLocation {
+            return Color.white
+        }
+        return Color.white.opacity(0.92)
+    }
 }
+
+// MARK: - Preview
 
 #Preview {
     NavigationStack {
-        TripsView(viewModel: TripsViewModel(initialItinerary: TripLeg.previewData))
+        TripsView(
+            viewModel: TripsViewModel(
+                initialItinerary: TripLeg.previewData,
+                initialCurrentLocation: CurrentLocation.previewData
+            )
+        )
     }
 }

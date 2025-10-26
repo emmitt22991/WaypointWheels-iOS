@@ -83,14 +83,12 @@ struct DashboardView: View {
                             await tripsViewModel.loadItinerary()
                         }
                         .navigationDestination(for: Park.self) { park in
-                            let parksService = ParksService()
-                            let viewModel = ParkDetailViewModel(
+                            ParkDetailView(
                                 parkID: park.id,
                                 initialSummary: park,
-                                service: parksService,
+                                service: ParksService(),
                                 onParkUpdated: { _ in }
                             )
-                            ParkDetailView(viewModel: viewModel)
                         }
                     }
 
