@@ -230,8 +230,10 @@ private struct LocationDetailView: View {
     }
 }
 
+#if DEBUG
 #Preview {
     NavigationStack {
         TripPlanView(legs: TripLeg.previewData)
     }
 }
+#endif

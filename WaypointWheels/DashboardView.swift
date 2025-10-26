@@ -1,58 +1,18 @@
 import SwiftUI
 
-// MARK: - Dashboard View Implementation Notes
-//
-// CURRENT STATE:
-// ✅ Trip data is fully integrated - displays real next travel day from TripsViewModel
-// ✅ Checklist tasks are now correctly filtered to show only TODAY'S tasks from dailyChecklists
-// ⚠️  Weather display is DISABLED pending ProfileService implementation
-// ⚠️  Current location shows trip start location as fallback until ProfileService exists
-//
-// IMPLEMENTATION NEEDED - Profile & Weather Service:
-//
-// The backend (dashboard.php) already has user location via $camperProfile['homeBase']
-// and fetches weather using WeatherClient::getCurrentConditions($homeBase).
-//
-// To complete the dashboard:
-//
-// 1. CREATE: ProfileService.swift
-//    - Method: fetchUserProfile() -> UserProfile
-//    - Should call new API endpoint: /api/profile.php
-//    - Return struct with: homeBase, weatherTimezone, etc.
-//
-// 2. CREATE: /api/profile.php endpoint (backend)
-//    - Return JSON with camper profile data
-//    - Include: home_base, weather_timezone, resolved_location
-//
-// 3. CREATE: WeatherService.swift
-//    - Method: fetchCurrentConditions(location: String) -> WeatherSummary
-//    - Should call new API endpoint: /api/weather.php
-//    - Return struct matching PHP WeatherClient response
-//
-// 4. CREATE: /api/weather.php endpoint (backend)
-//    - Wrapper around existing WeatherClient class
-//    - Accept location parameter
-//    - Return weather summary JSON
-//
-// 5. UPDATE: DashboardView.swift
-//    - Add: @StateObject private var profileViewModel = ProfileViewModel()
-//    - Add: @StateObject private var weatherViewModel = WeatherViewModel()
-//    - In .task: await profileViewModel.loadProfile()
-//    - In .task: if let location = profileViewModel.homeBase {
-//                  await weatherViewModel.loadWeather(for: location)
-//                }
-//    - Update computed properties to use real data
-//
-// BACKEND REFERENCE:
-// See dashboard.php lines 13-40 for how homeBase and weather are currently fetched
-// See WeatherClient.php for the weather API integration that needs to be exposed
-
 @MainActor
 struct DashboardView: View {
     let userName: String
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var checklistsViewModel = ChecklistsViewModel()
     @StateObject private var tripsViewModel = TripsViewModel()
+    
+    // Weather state - stores fetched weather data
+    @State private var weatherTemperature: Int? = nil
+    @State private var weatherHeadline: String? = nil
+    @State private var weatherNarrative: String? = nil
+    @State private var isLoadingWeather: Bool = false
+    @State private var weatherError: String? = nil
 
     private let accentGradient = LinearGradient(colors: [
         Color(red: 0.98, green: 0.88, blue: 0.63),
@@ -101,119 +61,224 @@ struct DashboardView: View {
         return "Plan your first route"
     }
     
-    // MARK: - Real Data Computed Properties for "From the Caravan"
+    // MARK: - Computed Properties for Real Trip Data & Weather
     
-    /// Current location data - should come from user's home base in their profile
-    /// Currently falls back to showing trip start location if available
+    /// Returns the current location from trip data in "City, State" format
     private var currentLocationTitle: String {
-        // TODO: Priority order once ProfileService is implemented:
-        // 1. User's home base from profile (when not traveling)
-        // 2. Current trip leg location (when actively traveling)
-        // 3. "Set Home Base" prompt
+        // Log what we're computing
+        print("📍 DashboardView: Computing currentLocationTitle")
         
-        // TEMPORARY: Until we have ProfileService, show trip start location
         if let leg = nextLeg {
-            return leg.start.name
+            let location = leg.start.description // This is "City, State" format
+            print("📍 Current location from trip: \(location)")
+            return location
         }
         
-        return "Set Your Home Base"
+        if tripsViewModel.isLoading {
+            return "Loading location..."
+        }
+        
+        return "No location set"
     }
     
+    /// Returns detail about current location
     private var currentLocationDetail: String {
-        // TODO: Once ProfileService exists, check userHomeBase first:
-        // if let homeBase = userHomeBase {
-        //     return "Holding down the fort at \(homeBase) until the next adventure."
-        // }
-        
-        // TEMPORARY: Show trip context
         if let leg = nextLeg {
-            return "The crew is currently at \(leg.start.name) preparing for the next leg."
+            return "The crew is at \(leg.start.name)"
         }
-        
-        return "Add your home base in Settings to track your location between trips."
+        return "Set up your first trip to track your location"
     }
     
-    /// Next travel day data - uses real trip itinerary
+    /// Returns the next travel day formatted date
     private var nextTravelDayValue: String {
+        print("📅 DashboardView: Computing nextTravelDayValue")
+        
         guard let leg = nextLeg else {
             return "No travel planned"
         }
         
-        // Use the pre-formatted dateRangeDescription from the API
-        // Format is already "Mon · Apr 14" style
         return leg.dateRangeDescription
     }
     
+    /// Returns detail about next travel day
     private var nextTravelDayDetail: String {
         guard let leg = nextLeg else {
-            return "Plan your next route to see travel details here."
+            return "Plan your first route to see travel days"
         }
         
         return "Wheels up soon! You're bound for \(leg.end.name)."
     }
     
-    /// Today's vibe/weather - needs profile service integration
+    /// Returns the weather display value
     private var todayVibeValue: String {
-        // TODO: Once ProfileService is implemented and returns homeBase:
-        // 1. Check if userHomeBase has a value
-        // 2. If yes, create WeatherService that calls the weather API
-        // 3. Fetch weather for userHomeBase location
-        // 4. Return formatted temperature and conditions
-        //
-        // Example future implementation:
-        // if let location = userHomeBase {
-        //     if let weather = weatherViewModel.currentConditions {
-        //         return "\(weather.temperature)° & \(weather.headline)"
-        //     }
-        //     return "Loading weather..."
-        // }
+        print("🌤️ DashboardView: todayVibeValue - temp: \(String(describing: weatherTemperature)), headline: \(String(describing: weatherHeadline))")
         
-        // For now, show the current location as the value
-        return currentLocationTitle
+        if isLoadingWeather {
+            return "Loading weather..."
+        }
+        
+        if weatherError != nil {
+            return "Weather unavailable"
+        }
+        
+        if let temp = weatherTemperature, let headline = weatherHeadline {
+            return "\(temp)° & \(headline)"
+        }
+        
+        return "Weather updates coming soon"
     }
     
+    /// Returns the weather detail narrative
     private var todayVibeDetail: String {
-        // TODO: Once weather is integrated, return the narrative or description
+        if weatherError != nil {
+            return weatherError ?? "Weather unavailable"
+        }
+        
+        if let narrative = weatherNarrative {
+            return narrative
+        }
+        
         let location = currentLocationTitle
-        
-        if location == "Set Your Home Base" {
-            return "Add your Home Base in Settings to unlock weather updates."
+        if location == "Loading location..." || location == "No location set" {
+            return "Set up your trip to see local weather conditions"
         }
         
-        return "Weather updates coming soon for \(location)."
+        return "Weather updates coming soon for \(location)"
     }
     
-    /// Check if there are any incomplete checklist items scheduled for today
-    /// This uses dailyChecklists which contains checklists specifically assigned to today's date
+    // MARK: - Checklist Helpers
+    
+    /// Returns true if there are incomplete tasks in today's daily checklists
     private var hasTasksToday: Bool {
-        // Count all incomplete items across all checklists scheduled for today
-        let incompleteCount = checklistsViewModel.dailyChecklists.reduce(0) { count, run in
-            count + run.checklist.items.filter({ !$0.isComplete }).count
+        let incompleteTasks = checklistsViewModel.dailyChecklists
+            .flatMap { $0.checklist.items }
+            .filter { !$0.isComplete }
+        
+        print("📋 DashboardView: Checking hasTasksToday")
+        print("📋 Daily checklists count: \(checklistsViewModel.dailyChecklists.count)")
+        print("📋 Incomplete tasks count: \(incompleteTasks.count)")
+        
+        return !incompleteTasks.isEmpty
+    }
+    
+    /// Returns the count of incomplete tasks today
+    private var tasksTodayCount: Int {
+        checklistsViewModel.dailyChecklists
+            .flatMap { $0.checklist.items }
+            .filter { !$0.isComplete }
+            .count
+    }
+    
+    // MARK: - Weather Fetching
+    
+    /// Fetches weather for the current trip location using city/state
+    private func fetchWeather() async {
+        print("🌤️ ========================================")
+        print("🌤️ fetchWeather() called")
+        print("🌤️ ========================================")
+        
+        // Get the city/state location (NOT park name)
+        let location = currentLocationTitle
+        print("🌤️ Current location title: '\(location)'")
+        
+        // Don't fetch if we don't have a valid location yet
+        guard location != "Loading location..." && location != "No location set" else {
+            print("🌤️ ⚠️ No valid location available yet, skipping weather fetch")
+            weatherError = "Set up your trip to see weather"
+            return
         }
         
-        return incompleteCount > 0
-    }
-    
-    /// Count of incomplete tasks scheduled for today across all daily checklists
-    private var tasksTodayCount: Int {
-        checklistsViewModel.dailyChecklists.reduce(0) { count, run in
-            count + run.checklist.items.filter({ !$0.isComplete }).count
+        // Set loading state
+        await MainActor.run {
+            print("🌤️ Setting isLoadingWeather = true")
+            isLoadingWeather = true
+            weatherError = nil
         }
-    }
-    
-    /// Get user's home base location for weather
-    /// TODO: Implement profile service to fetch user's home base from backend
-    /// For now, this returns nil until we create a ProfileService that calls the profile API
-    private var userHomeBase: String? {
-        // IMPLEMENTATION NEEDED:
-        // 1. Create ProfileService.swift with fetchUserProfile() method
-        // 2. Add @StateObject private var profileViewModel = ProfileViewModel()
-        // 3. Call profileViewModel.loadProfile() in .task
-        // 4. Return profileViewModel.homeBase here
-        //
-        // The backend already has this data in the camper_profile session variable
-        // We need to create an API endpoint like /api/profile.php that returns it
-        return nil
+        
+        // Build the weather API request
+        // Use path parameter instead of query string to avoid URL encoding issues
+        // Format: weather.php/Saulsbury, TN
+        let path = "weather.php/\(location)"
+        print("🌤️ ==========================================")
+        print("🌤️ API path: \(path)")
+        print("🌤️ Location: \(location)")
+        print("🌤️ ==========================================")
+        
+        do {
+            // Create API client and make request
+            let client = APIClient()
+            print("🌤️ APIClient created, making request...")
+            
+            let response: Data = try await client.request(path: path, method: .get)
+            print("🌤️ ✅ Response received, size: \(response.count) bytes")
+            
+            // Log raw response for debugging
+            if let responseString = String(data: response, encoding: .utf8) {
+                print("🌤️ Raw response: \(responseString)")
+            }
+            
+            // Parse the JSON response
+            let decoder = JSONDecoder()
+            let weatherResponse = try decoder.decode(WeatherResponse.self, from: response)
+            
+            print("🌤️ ✅ JSON decoded successfully")
+            print("🌤️ Status: \(weatherResponse.status)")
+            print("🌤️ Temperature: \(String(describing: weatherResponse.temperatureRounded))")
+            print("🌤️ Headline: \(String(describing: weatherResponse.headline))")
+            
+            // Check if weather was successfully fetched
+            guard weatherResponse.status == "ok" else {
+                print("🌤️ ⚠️ Weather status not 'ok': \(weatherResponse.status)")
+                await MainActor.run {
+                    isLoadingWeather = false
+                    if let errorCode = weatherResponse.errorCode {
+                        weatherError = "Weather unavailable (\(errorCode))"
+                    } else {
+                        weatherError = "Weather unavailable"
+                    }
+                }
+                return
+            }
+            
+            // Update UI with weather data
+            await MainActor.run {
+                print("🌤️ Updating UI with weather data...")
+                weatherTemperature = weatherResponse.temperatureRounded
+                weatherHeadline = weatherResponse.headline
+                weatherNarrative = weatherResponse.narrative
+                isLoadingWeather = false
+                weatherError = nil
+                print("🌤️ ✅ UI updated successfully!")
+            }
+            
+        } catch {
+            print("🌤️ ❌ ==========================================")
+            print("🌤️ ❌ Error fetching weather")
+            print("🌤️ ❌ Error: \(error)")
+            print("🌤️ ❌ Error type: \(type(of: error))")
+            print("🌤️ ❌ Error localized: \(error.localizedDescription)")
+            
+            // Try to get more details if it's an APIError
+            if let apiError = error as? APIClient.APIError {
+                print("🌤️ ❌ APIClient.APIError details: \(apiError)")
+            }
+            
+            // Check if it's a decoding error
+            if error is DecodingError {
+                print("🌤️ ❌ This is a DecodingError")
+            }
+            
+            print("🌤️ ❌ ==========================================")
+            
+            await MainActor.run {
+                isLoadingWeather = false
+                weatherError = "Unable to fetch weather"
+            }
+        }
+        
+        print("🌤️ ========================================")
+        print("🌤️ fetchWeather() complete")
+        print("🌤️ ========================================")
     }
 
     var body: some View {
@@ -234,16 +299,21 @@ struct DashboardView: View {
                     .padding(.bottom, 120)
                 }
                 .refreshable {
-                                    await tripsViewModel.loadItinerary(forceReload: true)
-                                    await checklistsViewModel.refresh()
-                                }
+                    await tripsViewModel.loadItinerary(forceReload: true)
+                    await checklistsViewModel.refresh()
+                    await fetchWeather() // Refresh weather too
+                }
 
                                 bottomNavigation
                             }
                         }
                         .task {
+                            print("⚡ DashboardView: .task block starting")
                             await tripsViewModel.loadItinerary()
-                            await checklistsViewModel.refresh()
+                            await checklistsViewModel.refresh() // Load daily checklists
+                            print("⚡ Trip itinerary loaded, now fetching weather")
+                            await fetchWeather() // Fetch weather after trip data loads
+                            print("⚡ DashboardView: .task block complete")
                         }
                         .navigationDestination(for: Park.self) { park in
                             ParkDetailView(
@@ -277,7 +347,6 @@ struct DashboardView: View {
                 }
             }
 
-            // FROM THE CARAVAN - Now with real data
             DashboardCard(title: "From the Caravan", subtitle: "Waypoint Wheels Dashboard", accent: accentGradient) {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Create plans, track your travels, the community, and what's coming up next.")
@@ -285,7 +354,7 @@ struct DashboardView: View {
                         .foregroundStyle(.secondary)
 
                     LazyVGrid(columns: heroTileColumns, alignment: .leading, spacing: 16) {
-                        // Current Location - using real data
+                        // REAL current location from trip data
                         dashboardTile(
                             title: "Current Location",
                             value: currentLocationTitle,
@@ -293,7 +362,7 @@ struct DashboardView: View {
                             icon: "mappin.and.ellipse"
                         )
                         
-                        // Next Travel Day - using real trip data
+                        // REAL next travel day from trip data
                         dashboardTile(
                             title: "Next Travel Day",
                             value: nextTravelDayValue,
@@ -301,12 +370,12 @@ struct DashboardView: View {
                             icon: "calendar"
                         )
                         
-                        // Today's Vibe/Weather - TODO: integrate weather service
+                        // REAL weather from weather API
                         dashboardTile(
                             title: "Today",
                             value: todayVibeValue,
                             detail: todayVibeDetail,
-                            icon: "sun.max.fill"
+                            icon: isLoadingWeather ? "cloud" : (weatherError != nil ? "cloud.fill" : "sun.max.fill")
                         )
                     }
                 }
@@ -338,12 +407,12 @@ struct DashboardView: View {
                     nextStopCardContent
                 }
 
-                // SIMPLIFIED CHECKLIST CARD - only show if there are tasks today
+                // Only show checklist card if there are tasks to do today
                 if hasTasksToday {
-                    DashboardCard(title: "Checklist", subtitle: "Tasks Today", accent: accentGradient) {
+                    DashboardCard(title: "Checklist", subtitle: "Tasks for Today", accent: accentGradient) {
                         VStack(alignment: .leading, spacing: 12) {
-                            // Show count of tasks
-                            HStack(spacing: 10) {
+                            // Simple alert-style message
+                            HStack(spacing: 12) {
                                 Image(systemName: "exclamationmark.circle.fill")
                                     .font(.title2)
                                     .foregroundStyle(Color.orange)
@@ -353,26 +422,32 @@ struct DashboardView: View {
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
                                     
-                                    Text("Stay on track by checking off each task.")
+                                    Text("Don't forget to check your list")
                                         .font(.footnote)
                                         .foregroundStyle(.secondary)
                                 }
+                                
+                                Spacer()
                             }
-                            .padding(12)
-                            .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-                            // Link to open checklists
+                            .padding(.vertical, 4)
+                            
+                            // Prominent button to open checklists
                             NavigationLink {
                                 ChecklistsView(viewModel: checklistsViewModel)
                             } label: {
-                                Label("Open Your Checklist", systemImage: "list.bullet.rectangle")
-                                    .font(.footnote)
-                                    .fontWeight(.semibold)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 10)
-                                    .background(heroAccentGradient, in: Capsule())
-                                    .foregroundColor(.white)
+                                HStack {
+                                    Label("Open Your Checklist", systemImage: "list.bullet.rectangle")
+                                        .font(.footnote)
+                                        .fontWeight(.semibold)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                                .background(Color(red: 0.28, green: 0.23, blue: 0.52), in: RoundedRectangle(cornerRadius: 12))
+                                .foregroundStyle(.white)
                             }
                             .buttonStyle(.plain)
                         }
@@ -712,15 +787,12 @@ struct DashboardView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // UPDATED HERO HEADER - Simplified to remove repetitive content
     private var heroHeader: some View {
         ZStack(alignment: .topLeading) {
-            // Shadow layer
             RoundedRectangle(cornerRadius: 36, style: .continuous)
                 .fill(Color(red: 0.69, green: 0.86, blue: 0.92).opacity(0.45))
                 .offset(x: 16, y: 18)
 
-            // Main white card
             RoundedRectangle(cornerRadius: 36, style: .continuous)
                 .fill(Color.white.opacity(0.96))
                 .overlay(
@@ -729,22 +801,20 @@ struct DashboardView: View {
                 )
                 .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: 12)
 
-            // Content - SIMPLIFIED: Start with "Waypoint Wheels" title
             VStack(alignment: .leading, spacing: 16) {
-                // Main title and tagline
+                // Removed repetitive "Camp In Style" and "Full-Time RV Life Made Easy" text
+                // Now starts directly with Waypoint Wheels title
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Waypoint Wheels")
                         .font(.system(size: 42, weight: .heavy, design: .rounded))
                         .foregroundStyle(Color(red: 0.12, green: 0.11, blue: 0.23))
                         .tracking(2)
-                    
                     Text("Camp in style and keep your crew rolling in sync across every adventure.")
                         .font(.body)
                         .foregroundStyle(Color.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                // Action buttons
                 HStack(spacing: 16) {
                     Button(action: {}) {
                         Label("Plan Your Next Stop", systemImage: "suitcase.fill")
@@ -775,8 +845,8 @@ struct DashboardView: View {
             .padding(.horizontal, 28)
             .padding(.bottom, 32)
         }
-        // Blue oval badge overlay - KEPT as requested
         .overlay(alignment: .topLeading) {
+            // Keep the blue oval badge - this stays!
             Capsule(style: .continuous)
                 .fill(heroAccentGradient)
                 .overlay(
@@ -941,6 +1011,30 @@ struct DashboardView: View {
         }
     }
 
+    private func checklistRow(item: Checklist.Item) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: item.isComplete ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(item.isComplete ? Color.green : Color.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.footnote)
+                    .foregroundStyle(.primary)
+
+                if !item.notes.isEmpty {
+                    Text(item.notes)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .font(.footnote)
+            Spacer()
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .background(Color.white.opacity(0.85), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
     private var featuredChecklistSubtitle: String {
         if let title = checklistsViewModel.featuredChecklist?.title, !title.isEmpty {
             return title
@@ -1049,6 +1143,22 @@ private struct DashboardCard<Content: View>: View {
                 )
         )
     }
+}
+
+// MARK: - Weather Response Model
+
+/// Response structure from weather.php endpoint
+/// Matches the JSON structure returned by the weather API
+struct WeatherResponse: Codable {
+    let status: String
+    let temperatureRounded: Int?
+    let headline: String?
+    let narrative: String?
+    let description: String?
+    let resolvedName: String?
+    let timezone: String?
+    let errorCode: String?
+    let message: String?
 }
 
 #Preview {

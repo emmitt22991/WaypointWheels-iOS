@@ -3,7 +3,8 @@ import MapKit
 
 // MARK: - Current Location Model
 
-/// Represents the user's current location/stay
+/// Represents the user's current location/stay during an active trip
+/// This shows where the user currently is (their "You are here" location)
 struct CurrentLocation: Decodable, Equatable {
     let parkId: Int
     let parkUuid: UUID
@@ -13,6 +14,17 @@ struct CurrentLocation: Decodable, Equatable {
     let departureDate: String?
     let coordinate: CLLocationCoordinate2D
     
+    // MARK: - Initializers
+    
+    /// Full initializer for creating CurrentLocation instances
+    /// - Parameters:
+    ///   - parkId: Database ID of the park
+    ///   - parkUuid: UUID of the park for API calls
+    ///   - parkName: Display name of the park
+    ///   - description: Location description (e.g., "Nashville, TN")
+    ///   - arrivalDate: ISO date string of arrival (YYYY-MM-DD)
+    ///   - departureDate: ISO date string of departure (YYYY-MM-DD)
+    ///   - coordinate: Geographic coordinates of the park
     init(parkId: Int,
          parkUuid: UUID,
          parkName: String,
@@ -29,64 +41,86 @@ struct CurrentLocation: Decodable, Equatable {
         self.coordinate = coordinate
     }
     
+    /// Decode from JSON response
+    /// Handles UUID decoding from string format (backend sends UUIDs as strings)
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
+        // Decode park ID
         parkId = try container.decode(Int.self, forKey: .parkId)
+        print("✅ CurrentLocation: Decoded parkId: \(parkId)")
         
-        // Decode UUID from string
+        // Decode UUID from string (backend returns UUID as string, not native UUID)
         if let uuidString = try? container.decode(String.self, forKey: .parkUuid),
            let uuid = UUID(uuidString: uuidString) {
             parkUuid = uuid
+            print("✅ CurrentLocation: Decoded parkUuid from string: \(uuidString)")
         } else if let uuid = try? container.decode(UUID.self, forKey: .parkUuid) {
             parkUuid = uuid
+            print("✅ CurrentLocation: Decoded parkUuid as native UUID")
         } else {
-            // Fallback: generate UUID from park ID (should match backend)
+            // Fallback: generate UUID (shouldn't happen in production)
             parkUuid = UUID()
-            print("⚠️ Failed to decode park UUID for current location")
+            print("⚠️ CurrentLocation: Failed to decode park UUID, generated fallback UUID")
         }
         
+        // Decode basic fields
         parkName = try container.decode(String.self, forKey: .parkName)
         description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
         arrivalDate = try container.decodeIfPresent(String.self, forKey: .arrivalDate)
         departureDate = try container.decodeIfPresent(String.self, forKey: .departureDate)
         
-        // Decode coordinate
+        print("✅ CurrentLocation: Decoded location: \(parkName)")
+        if let arrival = arrivalDate {
+            print("   - Arrival: \(arrival)")
+        }
+        if let departure = departureDate {
+            print("   - Departure: \(departure)")
+        }
+        
+        // Decode coordinate (backend sends as nested object with lat/long)
         if let coordinateDTO = try? container.decode(TripLocation.CoordinateDTO.self, forKey: .coordinate) {
             coordinate = CLLocationCoordinate2D(
                 latitude: coordinateDTO.latitude,
                 longitude: coordinateDTO.longitude
             )
+            print("✅ CurrentLocation: Decoded coordinate: (\(coordinateDTO.latitude), \(coordinateDTO.longitude))")
         } else {
-            // Fallback if coordinate structure is different
+            // Fallback if coordinate structure is different or missing
             coordinate = CLLocationCoordinate2D(latitude: 0, longitude: 0)
+            print("⚠️ CurrentLocation: Failed to decode coordinate, using default (0, 0)")
         }
     }
     
-    /// Format the date range for display
+    // MARK: - Display Helpers
+    
+    /// Format the date range for display in the UI
+    /// Examples:
+    /// - "Apr 10 – Apr 14" (if both dates present)
+    /// - "Since Apr 10" (if only arrival date)
+    /// - "Current location" (if no dates)
     var dateRangeDisplay: String {
         guard let arrival = arrivalDate else { return "Current location" }
         
-        if let departure = departureDate {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            
-            if let arrivalDate = formatter.date(from: arrival),
-               let departureDate = formatter.date(from: departure) {
-                formatter.dateFormat = "MMM d"
-                let arrivalStr = formatter.string(from: arrivalDate)
-                let departureStr = formatter.string(from: departureDate)
-                
-                if arrivalStr == departureStr {
-                    return arrivalStr
-                }
-                return "\(arrivalStr) – \(departureStr)"
-            }
-        }
-        
-        // Just show arrival if we have it
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
+        
+        // If we have both arrival and departure dates
+        if let departure = departureDate,
+           let arrivalDate = formatter.date(from: arrival),
+           let departureDate = formatter.date(from: departure) {
+            formatter.dateFormat = "MMM d"
+            let arrivalStr = formatter.string(from: arrivalDate)
+            let departureStr = formatter.string(from: departureDate)
+            
+            // Same date? Just show once
+            if arrivalStr == departureStr {
+                return arrivalStr
+            }
+            return "\(arrivalStr) – \(departureStr)"
+        }
+        
+        // Just show arrival if we only have that
         if let arrivalDate = formatter.date(from: arrival) {
             formatter.dateFormat = "MMM d"
             return "Since " + formatter.string(from: arrivalDate)
@@ -95,6 +129,10 @@ struct CurrentLocation: Decodable, Equatable {
         return "Current location"
     }
     
+    // MARK: - Equatable
+    
+    /// Compare two CurrentLocation instances
+    /// Coordinates are intentionally excluded from equality check since they may have floating point precision differences
     static func == (lhs: CurrentLocation, rhs: CurrentLocation) -> Bool {
         return lhs.parkId == rhs.parkId &&
                lhs.parkUuid == rhs.parkUuid &&
@@ -103,6 +141,8 @@ struct CurrentLocation: Decodable, Equatable {
                lhs.arrivalDate == rhs.arrivalDate &&
                lhs.departureDate == rhs.departureDate
     }
+    
+    // MARK: - Coding Keys
     
     private enum CodingKeys: String, CodingKey {
         case parkId = "park_id"
@@ -117,17 +157,32 @@ struct CurrentLocation: Decodable, Equatable {
 
 // MARK: - Trip Location Model
 
+/// Represents a specific location in a trip (start or end point of a leg)
+/// Each location has a name, description, and geographic coordinates
 struct TripLocation: Identifiable, Hashable, Decodable {
+    
+    /// Helper struct for decoding coordinates from backend
+    /// Backend sends coordinates as object with separate latitude/longitude fields
     struct CoordinateDTO: Decodable {
         let latitude: Double
         let longitude: Double
     }
 
+    // MARK: - Properties
+    
     let id: String
     let name: String
     let description: String
     let coordinate: CLLocationCoordinate2D
 
+    // MARK: - Initializers
+    
+    /// Create a TripLocation with all fields
+    /// - Parameters:
+    ///   - id: Unique identifier for this location
+    ///   - name: Display name (e.g., "Austin, TX")
+    ///   - description: Additional context (e.g., "Pecan Grove RV Park")
+    ///   - coordinate: Geographic coordinates
     init(id: String, name: String, description: String, coordinate: CLLocationCoordinate2D) {
         self.id = id
         self.name = name
@@ -135,28 +190,36 @@ struct TripLocation: Identifiable, Hashable, Decodable {
         self.coordinate = coordinate
     }
 
+    /// Decode from JSON with flexible handling of various formats
+    /// The backend may send coordinates in different structures, so we try multiple approaches
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
+        // Decode name
         name = try container.decode(String.self, forKey: .name)
 
+        // Build description from available fields
+        // Priority: explicit description > "city, state" > name
         let providedDescription = TripLocation.trimmedNonEmpty(
             try container.decodeIfPresent(String.self, forKey: .description)
         )
         let city = TripLocation.trimmedNonEmpty(try container.decodeIfPresent(String.self, forKey: .city))
         let state = TripLocation.trimmedNonEmpty(try container.decodeIfPresent(String.self, forKey: .state))
 
+        // Try to decode coordinate from nested object, fall back to separate fields
         if let coordinateDTO = try? container.decode(CoordinateDTO.self, forKey: .coordinate) {
             coordinate = CLLocationCoordinate2D(
                 latitude: coordinateDTO.latitude,
                 longitude: coordinateDTO.longitude
             )
         } else {
+            // Fallback: decode from separate latitude/longitude fields
             let latitude = try container.decode(Double.self, forKey: .latitude)
             let longitude = try container.decode(Double.self, forKey: .longitude)
             coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
         }
 
+        // Get or generate ID
         let providedID = TripLocation.trimmedNonEmpty(try container.decodeIfPresent(String.self, forKey: .id))
 
         id = providedID
@@ -167,14 +230,20 @@ struct TripLocation: Identifiable, Hashable, Decodable {
             ?? name
     }
 
+    // MARK: - Equatable & Hashable
+    
+    /// Two locations are equal if they have the same ID
     static func == (lhs: TripLocation, rhs: TripLocation) -> Bool {
         lhs.id == rhs.id
     }
 
+    /// Hash based on ID only
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
 
+    // MARK: - Coding Keys
+    
     private enum CodingKeys: String, CodingKey {
         case id
         case name
@@ -187,7 +256,11 @@ struct TripLocation: Identifiable, Hashable, Decodable {
     }
 }
 
+// MARK: - TripLocation Helpers
+
 private extension TripLocation {
+    /// Helper to clean up optional strings
+    /// Returns nil if string is nil or contains only whitespace
     static func trimmedNonEmpty(_ string: String?) -> String? {
         guard let trimmed = string?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
             return nil
@@ -195,6 +268,8 @@ private extension TripLocation {
         return trimmed
     }
 
+    /// Build a description from city and state components
+    /// Returns "City, State", "City", "State", or nil
     static func makeDescription(city: String?, state: String?) -> String? {
         switch (city, state) {
         case let (.some(city), .some(state)):
@@ -208,6 +283,8 @@ private extension TripLocation {
         }
     }
 
+    /// Generate a unique ID from coordinates when no ID is provided
+    /// Format: "coord_lat_XX.XXXXXX_lon_YY.YYYYYY"
     static func makeCoordinateIdentifier(from coordinate: CLLocationCoordinate2D) -> String {
         let locale = Locale(identifier: "en_US_POSIX")
         let latitude = String(format: "%.6f", locale: locale, coordinate.latitude)
@@ -218,18 +295,37 @@ private extension TripLocation {
 
 // MARK: - Trip Leg Model
 
+/// Represents a single leg of a trip (travel from one location to another)
+/// Contains departure/arrival info, distance, highlights, and notes
 struct TripLeg: Identifiable, Hashable, Decodable {
+    
+    // MARK: - Properties
+    
     let id: String
-    let dayLabel: String
-    let dateRangeDescription: String
+    let dayLabel: String              // e.g., "Next Trip", "Travel Day"
+    let dateRangeDescription: String  // e.g., "Mon · Apr 14"
     let start: TripLocation
     let end: TripLocation
     let distanceInMiles: Double
-    let estimatedDriveTime: String
-    let highlights: [String]
-    let notes: String?
-    let isFromCurrentLocation: Bool
+    let estimatedDriveTime: String    // e.g., "1 hr 5 min"
+    let highlights: [String]          // List of notable things to do/see
+    let notes: String?                // Optional additional notes
+    let isFromCurrentLocation: Bool   // True if this leg starts from where the user currently is
 
+    // MARK: - Initializers
+    
+    /// Create a complete TripLeg
+    /// - Parameters:
+    ///   - id: Unique identifier for this leg
+    ///   - dayLabel: Display label for the day (e.g., "Next Trip")
+    ///   - dateRangeDescription: Formatted date string (e.g., "Mon · Apr 14")
+    ///   - start: Starting location
+    ///   - end: Ending location
+    ///   - distanceInMiles: Distance to travel in miles
+    ///   - estimatedDriveTime: Human-readable drive time (e.g., "2 hr 30 min")
+    ///   - highlights: List of notable stops/activities along the way
+    ///   - notes: Optional additional information
+    ///   - isFromCurrentLocation: Whether this is the next leg from current location
     init(id: String,
          dayLabel: String,
          dateRangeDescription: String,
@@ -252,8 +348,12 @@ struct TripLeg: Identifiable, Hashable, Decodable {
         self.isFromCurrentLocation = isFromCurrentLocation
     }
 
+    /// Decode from JSON with flexible handling
+    /// Backend may send distance as string or number, highlights as array or string
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        // Decode basic fields
         id = try container.decode(String.self, forKey: .id)
         dayLabel = try container.decode(String.self, forKey: .dayLabel)
         dateRangeDescription = try container.decode(String.self, forKey: .dateRangeDescription)
@@ -276,7 +376,7 @@ struct TripLeg: Identifiable, Hashable, Decodable {
         
         estimatedDriveTime = try container.decode(String.self, forKey: .estimatedDriveTime)
         
-        // Handle highlights as either array or string
+        // Handle highlights as either array or string with bullet points
         if let highlightArray = try? container.decode([String].self, forKey: .highlights) {
             highlights = highlightArray
         } else {
@@ -288,6 +388,8 @@ struct TripLeg: Identifiable, Hashable, Decodable {
         isFromCurrentLocation = try container.decodeIfPresent(Bool.self, forKey: .isFromCurrentLocation) ?? false
     }
 
+    // MARK: - Coding Keys
+    
     private enum CodingKeys: String, CodingKey {
         case id
         case dayLabel = "day_label"
@@ -302,21 +404,29 @@ struct TripLeg: Identifiable, Hashable, Decodable {
     }
 }
 
+// MARK: - TripLeg Helpers
+
 private extension TripLeg {
+    /// Convert a bullet-pointed string into an array of highlights
+    /// Handles multiple bullet formats: •, *, -, –, —
+    /// Also handles newline-separated lists
     static func normalizeHighlights(from rawString: String) -> [String] {
         var normalized = rawString.replacingOccurrences(of: "\r\n", with: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
+        // Replace various bullet tokens with newlines
         let bulletTokens = ["•", "*", "- ", "– ", "— "]
         for token in bulletTokens {
             normalized = normalized.replacingOccurrences(of: token, with: "\n")
         }
 
+        // Split on newlines and clean up
         let components = normalized
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
 
+        // If we got no components but have text, treat whole string as one highlight
         if components.isEmpty, !normalized.isEmpty {
             return [normalized]
         }
@@ -329,7 +439,10 @@ private extension TripLeg {
 
 #if DEBUG
 extension TripLeg {
+    /// Sample preview data for SwiftUI previews and testing
+    /// Represents a 4-leg trip from New Braunfels through Texas to Oklahoma City
     static let previewData: [TripLeg] = {
+        // Define all locations
         let newBraunfels = TripLocation(
             id: "loc-new-braunfels",
             name: "New Braunfels, TX",
@@ -365,6 +478,7 @@ extension TripLeg {
             coordinate: CLLocationCoordinate2D(latitude: 35.4676, longitude: -97.5164)
         )
 
+        // Build trip legs
         return [
             TripLeg(
                 id: "leg-1",
@@ -380,7 +494,7 @@ extension TripLeg {
                     "Evening stroll through Zilker Park"
                 ],
                 notes: "Austin is a quick drive – fuel up the night before.",
-                isFromCurrentLocation: true
+                isFromCurrentLocation: true  // This is the next leg from current location
             ),
             TripLeg(
                 id: "leg-2",
@@ -432,6 +546,8 @@ extension TripLeg {
 }
 
 extension CurrentLocation {
+    /// Sample preview data for SwiftUI previews and testing
+    /// Represents a stay in New Braunfels
     static let previewData = CurrentLocation(
         parkId: 301,
         parkUuid: UUID(uuidString: "0000012d-0000-4000-8000-0000473d8bc0")!, // Generated from parkId 301

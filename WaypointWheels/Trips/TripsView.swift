@@ -471,6 +471,7 @@ private struct TimelineRow: View {
 
 // MARK: - Preview
 
+#if DEBUG
 #Preview {
     NavigationStack {
         TripsView(
@@ -481,3 +482,4 @@ private struct TimelineRow: View {
         )
     }
 }
+#endif
