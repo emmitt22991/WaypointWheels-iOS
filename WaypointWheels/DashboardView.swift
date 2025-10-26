@@ -347,7 +347,7 @@ struct DashboardView: View {
                 }
             }
 
-            DashboardCard(title: "From the Caravan", subtitle: "Waypoint Wheels Dashboard", accent: accentGradient) {
+            DashboardCard(title: "From the Caravan", subtitle: "Dashboard", accent: accentGradient) {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Create plans, track your travels, the community, and what's coming up next.")
                         .font(.subheadline)
@@ -407,11 +407,11 @@ struct DashboardView: View {
                     nextStopCardContent
                 }
 
-                // Only show checklist card if there are tasks to do today
-                if hasTasksToday {
-                    DashboardCard(title: "Checklist", subtitle: "Tasks for Today", accent: accentGradient) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            // Simple alert-style message
+                // ALWAYS show checklist card - either tasks or relaxation message
+                DashboardCard(title: "Checklist", subtitle: hasTasksToday ? "Tasks for Today" : "All Clear", accent: accentGradient) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if hasTasksToday {
+                            // TASKS TO DO - Show alert and task count
                             HStack(spacing: 12) {
                                 Image(systemName: "exclamationmark.circle.fill")
                                     .font(.title2)
@@ -448,6 +448,46 @@ struct DashboardView: View {
                                 .padding(.vertical, 12)
                                 .background(Color(red: 0.28, green: 0.23, blue: 0.52), in: RoundedRectangle(cornerRadius: 12))
                                 .foregroundStyle(.white)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            // NO TASKS - Show fun relaxation message
+                            HStack(spacing: 12) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(Color(red: 0.27, green: 0.64, blue: 0.56))
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Nothing to do today!")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                    
+                                    Text("Kick back and enjoy the RV life 🏕️")
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                }
+                                
+                                Spacer()
+                            }
+                            .padding(.vertical, 4)
+                            
+                            // Optional button to browse checklists anyway
+                            NavigationLink {
+                                ChecklistsView(viewModel: checklistsViewModel)
+                            } label: {
+                                HStack {
+                                    Label("Browse Checklists", systemImage: "list.bullet.rectangle")
+                                        .font(.footnote)
+                                        .fontWeight(.semibold)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                                .background(Color(red: 0.27, green: 0.64, blue: 0.56).opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+                                .foregroundStyle(Color(red: 0.27, green: 0.64, blue: 0.56))
                             }
                             .buttonStyle(.plain)
                         }
@@ -815,12 +855,13 @@ struct DashboardView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                HStack(spacing: 16) {
+                // 3 buttons in a row - made smaller to fit across
+                HStack(spacing: 10) {
                     Button(action: {}) {
-                        Label("Plan Your Next Stop", systemImage: "suitcase.fill")
-                            .font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 10)
+                        Label("Plan Next Stop", systemImage: "suitcase.fill")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
                             .background(heroAccentGradient, in: Capsule())
                             .foregroundColor(.white)
                     }
@@ -828,9 +869,23 @@ struct DashboardView: View {
 
                     Button(action: {}) {
                         Label("Community Hub", systemImage: "person.3.sequence.fill")
-                            .font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 10)
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
+                            .background(Color.white.opacity(0.9), in: Capsule())
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color(red: 0.25, green: 0.22, blue: 0.45).opacity(0.4), lineWidth: 1.5)
+                            )
+                            .foregroundStyle(Color(red: 0.25, green: 0.22, blue: 0.45))
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Button(action: {}) {
+                        Label("Dan Account", systemImage: "person.crop.circle.fill")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
                             .background(Color.white.opacity(0.9), in: Capsule())
                             .overlay(
                                 Capsule()

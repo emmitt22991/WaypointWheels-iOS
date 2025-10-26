@@ -3,11 +3,18 @@ import SwiftUI
 @MainActor
 struct TripsView: View {
     @StateObject private var viewModel: TripsViewModel
+    @StateObject private var parksViewModel: ParksViewModel
     @State private var showDeleteConfirmation: TripLeg?
+    // State for showing park detail when location name is tapped
+    @State private var selectedParkForDetail: Park?
+    @State private var parkSearchAlert: String?
 
     @MainActor
-    init(viewModel: TripsViewModel? = nil) {
+    init(viewModel: TripsViewModel? = nil, parksViewModel: ParksViewModel? = nil) {
         _viewModel = StateObject(wrappedValue: viewModel ?? TripsViewModel())
+        _parksViewModel = StateObject(wrappedValue: parksViewModel ?? ParksViewModel(parksService: ParksService()))
+        
+        print("🏕️ TripsView: Initialized with viewModel and parksViewModel")
     }
 
     var body: some View {
@@ -47,7 +54,13 @@ struct TripsView: View {
                         TimelineRow(
                             leg: leg,
                             isFirst: index == 0,
-                            isLast: index == viewModel.itinerary.count - 1
+                            isLast: index == viewModel.itinerary.count - 1,
+                            onLocationTapped: { locationName in
+                                // User tapped a location name in the timeline
+                                // Search for a park matching that location name
+                                print("🔍 TripsView: User tapped location: \(locationName)")
+                                handleLocationTap(locationName: locationName)
+                            }
                         )
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
@@ -93,91 +106,232 @@ struct TripsView: View {
         }
         .task {
             await viewModel.loadItinerary()
+            // Load parks so we can search them when user taps location names
+            await parksViewModel.loadParks()
         }
         .refreshable {
             await viewModel.loadItinerary(forceReload: true)
         }
+        // Show park detail sheet when a park is found
+        .sheet(item: $selectedParkForDetail) { park in
+            NavigationStack {
+                ParkDetailView(
+                    parkID: park.id,
+                    initialSummary: park,
+                    service: ParksService(),
+                    onParkUpdated: { updatedPark in
+                        // Update the park in the parks list when ratings/reviews change
+                        parksViewModel.replacePark(with: updatedPark)
+                    }
+                )
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") {
+                            selectedParkForDetail = nil
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.large])
+        }
+        // Show alert if park not found
+        .alert("Park Not Found", isPresented: Binding(
+            get: { parkSearchAlert != nil },
+            set: { if !$0 { parkSearchAlert = nil } }
+        )) {
+            Button("OK") {
+                parkSearchAlert = nil
+            }
+        } message: {
+            if let alertMessage = parkSearchAlert {
+                Text(alertMessage)
+            }
+        }
     }
+    
+    // MARK: - Location Tap Handler
+    
+    /// Handle when user taps a location name in the timeline
+    /// Searches for a park matching the location name and opens park detail
+    private func handleLocationTap(locationName: String) {
+        print("🔍 TripsView: Searching for park matching location: '\(locationName)'")
+        
+        // Extract just the park/city name from location strings like "Cherokee Landing" or "Nashville, TN"
+        // Location names might be:
+        // - Just park name: "Cherokee Landing"
+        // - City, State: "Nashville, TN"
+        // - Park name at City, State: "Cherokee Landing, Nashville, TN"
+        
+        let searchTerm = locationName.trimmingCharacters(in: .whitespaces)
+        print("🔍 TripsView: Using search term: '\(searchTerm)'")
+        
+        // Search through all parks for a name match
+        // Try exact match first, then case-insensitive contains
+        let exactMatch = parksViewModel.parks.first { park in
+            park.name.trimmingCharacters(in: .whitespaces).lowercased() == searchTerm.lowercased()
+        }
+        
+        if let park = exactMatch {
+            print("✅ TripsView: Found exact match park: \(park.name) (ID: \(park.id))")
+            selectedParkForDetail = park
+            return
+        }
+        
+        // Try partial match on park name
+        let partialMatch = parksViewModel.parks.first { park in
+            park.name.lowercased().contains(searchTerm.lowercased())
+        }
+        
+        if let park = partialMatch {
+            print("✅ TripsView: Found partial match park: \(park.name) (ID: \(park.id))")
+            selectedParkForDetail = park
+            return
+        }
+        
+        // If location is "City, State" format, try matching by city name
+        let cityComponents = searchTerm.components(separatedBy: ",")
+        if cityComponents.count >= 2 {
+            let cityName = cityComponents[0].trimmingCharacters(in: .whitespaces)
+            let stateCode = cityComponents[1].trimmingCharacters(in: .whitespaces)
+            
+            print("🔍 TripsView: Trying city/state match: city='\(cityName)', state='\(stateCode)'")
+            
+            let cityMatch = parksViewModel.parks.first { park in
+                park.city.lowercased() == cityName.lowercased() &&
+                park.state.lowercased() == stateCode.lowercased()
+            }
+            
+            if let park = cityMatch {
+                print("✅ TripsView: Found city/state match park: \(park.name) in \(park.city), \(park.state)")
+                selectedParkForDetail = park
+                return
+            }
+        }
+        
+        // No park found
+        print("❌ TripsView: No park found matching '\(locationName)'")
+        print("📊 TripsView: Total parks available to search: \(parksViewModel.parks.count)")
+        
+        // Show alert to user
+        parkSearchAlert = "Could not find a park matching '\(locationName)'. The park may not be in the database yet, or the location name may not match exactly."
+    }
+
+    // MARK: - View Components
 
     private var tripPlanButton: some View {
         HStack(spacing: 16) {
             ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(red: 0.87, green: 0.90, blue: 0.97))
-                    .frame(width: 64, height: 64)
-                Image(systemName: "map.circle.fill")
-                    .font(.system(size: 36))
-                    .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.28, green: 0.23, blue: 0.52),
+                                Color(red: 0.32, green: 0.29, blue: 0.55)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 50, height: 50)
+
+                Image(systemName: "map.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(.white)
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Trip Plan")
+            VStack(alignment: .leading, spacing: 4) {
+                Text("View Trip Plan")
                     .font(.headline)
                     .fontWeight(.semibold)
-                Text("Open the map to set your starting point, waypoints, and final stop.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
+
+                if !viewModel.itinerary.isEmpty {
+                    Text("\(viewModel.itinerary.count) legs · \(totalMiles) miles")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Plan your next adventure")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer()
 
             Image(systemName: "chevron.right")
-                .foregroundStyle(.secondary)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.tertiary)
         }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white)
+                .shadow(color: Color(red: 0.28, green: 0.23, blue: 0.52).opacity(0.15), radius: 12, x: 0, y: 6)
+        )
+        .padding(.horizontal, 4)
         .padding(.vertical, 8)
-        .contentShape(Rectangle())
+    }
+
+    private var totalMiles: String {
+        let sum = viewModel.itinerary.reduce(0.0) { $0 + $1.distanceInMiles }
+        return String(format: "%.0f", sum)
     }
 
     private var loadingState: some View {
-        HStack {
-            Spacer()
-            ProgressView("Loading itinerary…")
-                .padding(.vertical, 24)
-            Spacer()
+        Section {
+            HStack {
+                Spacer()
+                ProgressView("Loading your trip...")
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .listRowBackground(Color.clear)
         }
-        .listRowBackground(Color.clear)
     }
 
     private func errorState(message: String) -> some View {
-        VStack(alignment: .center, spacing: 12) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 44))
-                .foregroundStyle(Color.orange)
-            Text("We couldn't load your trip")
-                .font(.headline)
-            Text(message)
-                .font(.subheadline)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-            Button {
-                Task {
-                    await viewModel.loadItinerary(forceReload: true)
+        Section {
+            VStack(spacing: 16) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.largeTitle)
+                    .foregroundStyle(.orange)
+                Text("Unable to load trip")
+                    .font(.headline)
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button("Try Again") {
+                    Task {
+                        await viewModel.loadItinerary(forceReload: true)
+                    }
                 }
-            } label: {
-                Text("Try Again")
-                    .fontWeight(.semibold)
+                .buttonStyle(.borderedProminent)
+                .tint(Color(red: 0.28, green: 0.23, blue: 0.52))
             }
-            .buttonStyle(.borderedProminent)
+            .padding()
+            .listRowBackground(Color.clear)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
-        .listRowBackground(Color.clear)
     }
 
     private var emptyState: some View {
-        VStack(alignment: .center, spacing: 12) {
-            Image(systemName: "calendar")
-                .font(.system(size: 44))
-                .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
-            Text("No trip legs yet")
-                .font(.headline)
-            Text("Add your first route leg from the Trip Plan map to build an itinerary.")
-                .font(.subheadline)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
+        Section {
+            VStack(spacing: 20) {
+                Image(systemName: "map")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.secondary)
+                Text("No Trips Planned")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                Text("Start planning your next adventure!")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
     }
 }
 
@@ -185,19 +339,30 @@ struct TripsView: View {
 
 private struct CurrentLocationCard: View {
     let location: CurrentLocation
+    // State to show park detail sheet when card is tapped
     @State private var showingParkDetail = false
     
     var body: some View {
+        // Make the entire card clickable
         Button {
+            print("📍 CurrentLocationCard: User tapped current location card for: \(location.parkName)")
             showingParkDetail = true
         } label: {
             cardContent
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.plain) // Remove default button styling
         .sheet(isPresented: $showingParkDetail) {
             NavigationStack {
                 ParkDetailDestination(location: location)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Close") {
+                                showingParkDetail = false
+                            }
+                        }
+                    }
             }
+            .presentationDetents([.large])
         }
     }
     
@@ -352,10 +517,8 @@ private struct ParkDetailDestination: View {
     // Helper to extract state from description like "Nashville, TN"
     private static func extractState(from description: String) -> String {
         let parts = description.components(separatedBy: ",")
-        if parts.count > 1 {
-            return parts[1].trimmingCharacters(in: .whitespaces)
-        }
-        return ""
+        guard parts.count > 1 else { return "" }
+        return parts[1].trimmingCharacters(in: .whitespaces)
     }
 }
 
@@ -365,7 +528,9 @@ private struct TimelineRow: View {
     let leg: TripLeg
     let isFirst: Bool
     let isLast: Bool
-
+    /// Callback when user taps a location name
+    let onLocationTapped: (String) -> Void
+    
     var body: some View {
         HStack(alignment: .top, spacing: 20) {
             // Timeline indicator
@@ -404,10 +569,39 @@ private struct TimelineRow: View {
                         .foregroundStyle(.secondary)
                 }
 
-                // Route
+                // Route - MAKE LOCATION NAMES CLICKABLE
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("\(leg.start.name) → \(leg.end.name)")
-                        .font(.headline)
+                    // Display route with clickable location names
+                    HStack(spacing: 4) {
+                        // Start location - clickable
+                        Button {
+                            print("🗺️ TimelineRow: User tapped START location: \(leg.start.name)")
+                            onLocationTapped(leg.start.name)
+                        } label: {
+                            Text(leg.start.name)
+                                .font(.headline)
+                                .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
+                                .underline() // Visual cue that it's clickable
+                        }
+                        
+                        // Arrow separator
+                        Text("→")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                        
+                        // End location - clickable
+                        Button {
+                            print("🗺️ TimelineRow: User tapped END location: \(leg.end.name)")
+                            onLocationTapped(leg.end.name)
+                        } label: {
+                            Text(leg.end.name)
+                                .font(.headline)
+                                .foregroundStyle(Color(red: 0.28, green: 0.23, blue: 0.52))
+                                .underline() // Visual cue that it's clickable
+                        }
+                    }
+                    
+                    // Distance and drive time (not clickable)
                     Text("\(String(format: "%.1f", leg.distanceInMiles)) miles · \(leg.estimatedDriveTime)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -478,7 +672,8 @@ private struct TimelineRow: View {
             viewModel: TripsViewModel(
                 initialItinerary: TripLeg.previewData,
                 initialCurrentLocation: CurrentLocation.previewData
-            )
+            ),
+            parksViewModel: ParksViewModel(parks: Park.sampleData, parksService: ParksService())
         )
     }
 }
