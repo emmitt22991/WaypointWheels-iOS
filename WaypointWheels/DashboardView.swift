@@ -842,18 +842,13 @@ struct DashboardView: View {
                 .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: 12)
 
             VStack(alignment: .leading, spacing: 16) {
-                // Removed repetitive "Camp In Style" and "Full-Time RV Life Made Easy" text
-                // Now starts directly with Waypoint Wheels title
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Waypoint Wheels")
-                        .font(.system(size: 42, weight: .heavy, design: .rounded))
-                        .foregroundStyle(Color(red: 0.12, green: 0.11, blue: 0.23))
-                        .tracking(2)
-                    Text("Camp in style and keep your crew rolling in sync across every adventure.")
-                        .font(.body)
-                        .foregroundStyle(Color.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                // Blue badge at top already says "Waypoint Wheels" - no need to repeat it here
+                // Just show the description text
+                Text("Camp in style and keep your crew rolling in sync across every adventure.")
+                    .font(.body)
+                    .foregroundStyle(Color.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 8)
 
                 // 3 buttons in a row - made smaller to fit across
                 HStack(spacing: 10) {
