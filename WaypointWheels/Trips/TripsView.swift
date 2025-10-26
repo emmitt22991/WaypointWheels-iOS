@@ -185,42 +185,20 @@ struct TripsView: View {
 
 private struct CurrentLocationCard: View {
     let location: CurrentLocation
+    @State private var showingParkDetail = false
     
     var body: some View {
-        NavigationLink {
-            makeDetailView()
+        Button {
+            showingParkDetail = true
         } label: {
             cardContent
         }
         .buttonStyle(.plain)
-    }
-    
-    // Create the detail view with proper initialization
-    @ViewBuilder
-    private func makeDetailView() -> some View {
-        let parksService = ParksService()
-        
-        // Create a minimal Park object for navigation
-        let minimalPark = Park(
-            id: location.parkUuid,
-            name: location.parkName,
-            state: Self.extractState(from: location.description),
-            city: Self.extractCity(from: location.description),
-            familyRating: 0.0, // Will be loaded by detail view
-            description: "",
-            memberships: [],
-            amenities: [],
-            featuredNotes: []
-        )
-        
-        let detailViewModel = ParkDetailViewModel(
-            parkID: location.parkUuid,
-            initialSummary: minimalPark,
-            service: parksService,
-            onParkUpdated: { _ in }
-        )
-        
-        ParkDetailView(viewModel: detailViewModel)
+        .sheet(isPresented: $showingParkDetail) {
+            NavigationStack {
+                ParkDetailDestination(location: location)
+            }
+        }
     }
     
     private var cardContent: some View {
@@ -338,6 +316,31 @@ private struct CurrentLocationCard: View {
         
         formatter.dateFormat = "EEEE, MMMM d"
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - Park Detail Destination Helper
+
+private struct ParkDetailDestination: View {
+    let location: CurrentLocation
+    
+    var body: some View {
+        ParkDetailView(
+            parkID: location.parkUuid,
+            initialSummary: Park(
+                id: location.parkUuid,
+                name: location.parkName,
+                state: Self.extractState(from: location.description),
+                city: Self.extractCity(from: location.description),
+                familyRating: 0.0,
+                description: "",
+                memberships: [],
+                amenities: [],
+                featuredNotes: []
+            ),
+            service: ParksService(),
+            onParkUpdated: { _ in }
+        )
     }
     
     // Helper to extract city from description like "Nashville, TN"
